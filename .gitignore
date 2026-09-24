@@ -1,0 +1,19 @@
+# Build output
+build/
+DerivedData/
+*.xcarchive
+
+# Xcode/Xcode-generated per-user state
+xcuserdata/
+*.xcuserdatad
+*.xcuserstate
+
+# macOS
+.DS_Store
+
+# Written by Menu > Save Diagnostics... - local debugging output, not source
+FX Analyzer diagnostics.txt
+
+# The Voxengo SPAN trace behind FX Reference's "Combine" target curve. It
+# belongs to that plugin's repository; nothing in this one reads it.
+Combine.png
