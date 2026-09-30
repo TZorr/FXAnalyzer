@@ -2,7 +2,9 @@
 //  HeaderBar.h
 //  FX Analyzer
 //
-//  Name, preset, menu.
+//  Name, a display, preset and menu - the top row of Kitbox and Rackbox: the
+//  wordmark on the left, a near-black display saying which page is open and
+//  what the input is, and the two buttons on the right.
 //
 //  There was an input-activity lamp to the left of the name, and it is gone by
 //  request. What went with it is the one glance that separated "silent bus"
@@ -21,7 +23,14 @@ class HeaderBar : public ThemedComponent
 public:
     HeaderBar();
 
-    void setTitle (const juce::String&);
+    /** The page's name and one line saying what it shows, for the display in
+        the middle of the header. */
+    void setPage (const juce::String& name, const juce::String& description);
+
+    /** The right-hand side of the display's top line: sample rate and channel,
+        and FROZEN while the analysis is held. Repaints only on a change. */
+    void setStatus (const juce::String& text, bool frozen);
+
     void setPresetName (const juce::String&);
 
     /** 0 to 1, from the input's recent level. Smoothed by the caller. */
@@ -46,11 +55,12 @@ public:
     void mouseExit (const juce::MouseEvent&) override;
 
 private:
-    juce::String title { "FX Analyzer" };
+    juce::String pageName, pageDescription, status;
+    bool frozen = false;
     juce::String presetName { "Default" };
     float activity = 0.0f;
 
-    juce::Rectangle<int> lampArea, titleArea, presetArea, menuArea;
+    juce::Rectangle<int> wordmarkArea, displayArea, presetArea, menuArea;
     bool hoveringPreset = false, hoveringMenu = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HeaderBar)

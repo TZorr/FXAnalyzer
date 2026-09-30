@@ -115,25 +115,28 @@ void ScopePage::applyTimeBase()
 }
 
 //==============================================================================
-juce::Rectangle<float> ScopePage::plotArea() const
+juce::Rectangle<float> ScopePage::displayArea() const
 {
-    auto area = getLocalBounds().reduced (10, 10);
+    auto area = getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY);
     area.removeFromRight (Layout::sideColumnWidth);
-    area.removeFromLeft (Layout::axisGutterLeft);
-    area.removeFromBottom (Layout::axisGutterBottom);
 
     return area.toFloat();
 }
 
+juce::Rectangle<float> ScopePage::plotArea() const
+{
+    return GraphAxes::plotInDisplay (displayArea());
+}
+
 void ScopePage::resized()
 {
-    auto area = getLocalBounds().reduced (10, 10);
-    auto sideColumn = area.removeFromRight (Layout::sideColumnWidth).reduced (6, 0);
+    auto area = getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY);
+    auto sideColumn = area.removeFromRight (Layout::sideColumnWidth).withTrimmedLeft (10);
 
     layOutStepperColumn (sideColumn, { &timeStepper, &triggerStepper, &gainStepper });
 
     const auto plot = plotArea().toNearestInt();
-    freezeButton.setBounds (plot.getRight() - 46, plot.getY() + 8, 38, 38);
+    freezeButton.setBounds (plot.getRight() - 58, plot.getY() + 2, 58, 20);
 }
 
 void ScopePage::refresh()
@@ -151,6 +154,7 @@ void ScopePage::paint (juce::Graphics& g)
     g.setColour (t.background);
     g.fillRect (getLocalBounds());
 
+    GraphAxes::paintDisplay (g, t, displayArea());
     GraphAxes::paintBed (g, t, plot);
     GraphAxes::paintDivisionGrid (g, t, plot, 10, 8);
 
@@ -185,7 +189,7 @@ void ScopePage::paint (juce::Graphics& g)
     const auto milliseconds = FXParams::scopeTimeValues[juce::jlimit (0, FXParams::lastScopeTimeIndex, timeIndex)];
 
     g.setFont (t.axisFont());
-    g.setColour (t.accent);
+    g.setColour (t.bedDim);
 
     for (int division = 0; division <= 10; division += 2)
     {
@@ -193,7 +197,7 @@ void ScopePage::paint (juce::Graphics& g)
         const auto ms = milliseconds * (float) division / 10.0f;
 
         auto labelArea = juce::Rectangle<float> (60.0f, (float) Layout::axisGutterBottom - 4.0f)
-                             .withCentre ({ x, plot.getBottom() + (float) Layout::axisGutterBottom * 0.5f });
+                             .withCentre ({ x, plot.getBottom() + (float) Layout::axisGutterBottom * 0.5f - 2.0f });
 
         labelArea.setX (juce::jlimit (plot.getX(), plot.getRight() - 60.0f, labelArea.getX()));
 
@@ -213,7 +217,7 @@ void ScopePage::paint (juce::Graphics& g)
 
         g.drawText (juce::String (amplitude, 2),
                     juce::Rectangle<float> (plot.getX() - (float) Layout::axisGutterLeft, y - 9.0f,
-                                            (float) Layout::axisGutterLeft - 6.0f, 18.0f),
+                                            (float) Layout::axisGutterLeft - 8.0f, 18.0f),
                     juce::Justification::centredRight, false);
     }
 
@@ -225,7 +229,7 @@ void ScopePage::paint (juce::Graphics& g)
                             + (gainIndex == 0 ? "   Auto " + utf8 ("\xc3\x97") + juce::String (appliedGain, 1)
                                               : juce::String());
 
-    g.setColour (scope.isTriggered() ? t.dimText() : t.warning);
+    g.setColour (scope.isTriggered() ? t.bedDim : t.warning);
     g.setFont (t.axisFont());
     g.drawText (status,
                 juce::Rectangle<float> (plot.getX() + 8.0f, plot.getY() + 6.0f, 320.0f, 18.0f),

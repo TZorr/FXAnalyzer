@@ -2,7 +2,7 @@
 //  PageBase.h
 //  FX Analyzer
 //
-//  The two things every piece of this panel has in common: it knows the theme,
+//  The two things every piece of this panel has in common: it knows the palette,
 //  and it is told when to look at the analysis again.
 //
 //  ThemedComponent exists so that no component ever reads a colour from
@@ -87,8 +87,14 @@ namespace Layout
     // rather than as a header that grows and a graph that does not.
     inline constexpr int defaultWidth  = 900;
     inline constexpr int defaultHeight = 504;
-    inline constexpr int headerHeight  = 52;
-    inline constexpr int tabBarHeight  = 36;
+    inline constexpr int headerHeight  = 68;
+    inline constexpr int tabBarHeight  = 34;
+
+    /** The space between a page's edge and what it draws, so that the displays
+        and the header line up at the panel's 15 point margin (the editor itself
+        is inset by 2). */
+    inline constexpr int pageMarginX = 13;
+    inline constexpr int pageMarginY = 6;
 
     /** Dead space below the tab labels, at the very bottom of the window.
 

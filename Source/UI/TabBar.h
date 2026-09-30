@@ -2,45 +2,18 @@
 //  TabBar.h
 //  FX Analyzer
 //
-//  Six page names across the bottom.
+//  Six page names across the bottom, as a row of flat buttons (since 0.2, the
+//  Kitbox / Rackbox look): the selected page is the one lit in the accent, the
+//  one under the pointer a shade darker than the rest.
 //
-//  The active tab is the pale one and the others are the accent colour, which
-//  is the opposite of the usual convention and is what the mockup does. It is
-//  also right for this panel: the accent is the colour of every curve on the
-//  screen, so an accent-coloured active tab would be the one element competing
-//  with the data for the same colour. The pale tab wins by contrast against a
-//  row of green instead.
-//
-//  Against a row of *green*. That was the whole of the argument and it did not
-//  survive the themes it was meant to serve: in Onyx the accent is a near-white
-//  and so is the text, and the measured contrast between the selected tab and
-//  the others came out at 1.00 - the same brightness, to two decimal places.
-//  The strip showed nothing about which page was open. It was reported as
-//  clicks not working, which is what it looks like from the outside: the page
-//  did change, every time, and the only thing that said so was the graph.
-//
-//  So the difference no longer rests on the palette. That was tried in stages
-//  and the stages are worth recording, because the first two were not enough.
-//
-//  Dimming the unselected tabs fixed the measurement and not the panel: the
-//  *hovered* tab was still drawn in the text colour, so the tab under the
-//  pointer looked exactly like the selected one - 1.14 apart in Yutani - and
-//  since the pointer is always on the tab you are about to click, the thing you
-//  were looking at was already bright before you clicked it. Nothing appeared
-//  to happen. Reported as having to click beside the word instead of on it,
-//  which is what you try when a click seems not to register.
-//
-//  Retuning the alphas cannot fix that either, and the numbers say why: in a
-//  monochrome theme the accent and the text are the same colour, so three
-//  states cannot be told apart by brightness. At the point where hover is
-//  visible against the unselected tabs it is indistinguishable from selected.
-//
-//  So the selection is a *shape*: a bar under the label. Hover is the same bar,
-//  faint. Presence and strength of a mark, rather than a shade of a colour -
-//  which is the one thing a palette cannot take away. The bar is drawn in the
-//  text colour, the one colour a theme cannot make illegible without making the
-//  whole panel illegible; Ice's accent measured 2.93 against its own bed, under
-//  the 3:1 that a piece of interface which is not text has to clear.
+//  The selection used to be a bar under the label, and the history of why is
+//  worth one paragraph. With user themes the difference between the selected
+//  tab and the others could not rest on a colour: in one theme the accent and
+//  the text were the same near-white and the selected tab measured 1.00 against
+//  the rest - the strip showed nothing, and it was reported as clicks not
+//  working. With one fixed design the fill can carry it again, and EditorShot's
+//  hit map holds it to a contrast floor so that it stays that way: a filled
+//  orange button against grey ones, and dark type on the orange.
 //
 
 #pragma once
@@ -68,17 +41,6 @@ public:
         work. */
     void setContentHeight (int pixels);
 
-    /** The three states, as the numbers that draw them. Public because the
-        contrast check in EditorShot has to apply the same ones: a floor
-        asserted against a different value than the one being drawn is not a
-        floor.
-
-        `inactiveAlpha` and `hoverAlpha` scale the accent for the label;
-        `hoverMarkAlpha` scales the text colour for the bar, which the selected
-        tab draws at full strength. */
-    static constexpr float inactiveAlpha  = 0.6f;
-    static constexpr float hoverAlpha     = 0.85f;
-    static constexpr float hoverMarkAlpha = 0.32f;
 
     std::function<void (int)> onChange;
 
@@ -102,6 +64,8 @@ public:
     }
 
 private:
+    static constexpr float gap = 5.0f;
+
     /** Where the label is drawn. */
     juce::Rectangle<float> areaForTab (int index) const;
 

@@ -2,13 +2,12 @@
 //  IconButton.h
 //  FX Analyzer
 //
-//  A circle with a symbol in it: the cursor readout and the freeze button that
-//  sit in the corner of a graph.
+//  A small flat button with a word on it: the cursor readout, the bass zoom
+//  and freeze in the corner of a graph, and Reset on the Loudness page.
 //
-//  The icons are drawn as paths rather than loaded as images. Not for purity -
-//  because they are theme-coloured, and an image would have to be re-tinted, or
-//  shipped once per theme, or drawn in a colour that stops matching the moment
-//  the accent changes. A path takes the colour it is given.
+//  Until 0.2 these were circles with drawn symbols in them - a magnifier, a
+//  snowflake, a letter B, a circular arrow. The name stayed because the enum
+//  does: the four buttons are still four kinds, and each kind now has a word.
 //
 
 #pragma once
@@ -19,15 +18,17 @@ class IconButton : public ThemedComponent,
                    public juce::SettableTooltipClient
 {
 public:
-    /** `bass` is drawn as the letter B rather than as a path. The reason for
-        paths was never the geometry - it was that a themed icon must take the
-        colour it is given, and a glyph does that as readily as a stroke. A
-        picture of a low-pass shape would have been guesswork about what the
-        button does; the letter is what was asked for and what the tooltip
-        explains. */
-    enum class Icon { magnifier, snowflake, bass, reset };
+    /** Which button this is; see text() in the .cpp for the word each gets. */
+    enum class Icon { magnifier, snowflake, bass, reset, word };
 
     explicit IconButton (Icon iconToDraw);
+
+    /** A button with any word on it - the channel buttons beside these. */
+    explicit IconButton (const juce::String& word);
+
+    /** Where the button sits. On a graph's dark bed it takes the bed's own
+        button colours; on the panel body (Loudness's Reset) the body's. */
+    void setOnBed (bool shouldBeOnBed) { onBed = shouldBeOnBed; repaint(); }
 
     /** A toggle stays lit once clicked; a momentary button flashes and returns.
         Freeze is a toggle, Reset is not. */
@@ -44,15 +45,14 @@ public:
     void mouseExit (const juce::MouseEvent&) override;
 
 private:
-    void drawMagnifier (juce::Graphics&, juce::Rectangle<float>) const;
-    void drawBass      (juce::Graphics&, juce::Rectangle<float>) const;
-    void drawSnowflake (juce::Graphics&, juce::Rectangle<float>) const;
-    void drawReset     (juce::Graphics&, juce::Rectangle<float>) const;
+    juce::String text() const;
 
     Icon icon;
+    juce::String customText;
     bool toggles = true;
     bool on = false;
     bool hovering = false;
+    bool onBed = true;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IconButton)
 };

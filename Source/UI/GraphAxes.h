@@ -33,7 +33,20 @@ namespace GraphAxes
     float yToDecibels (float y,  juce::Rectangle<float> plot, float topDb, float bottomDb);
 
     //==============================================================================
-    /** The sunk bed a graph is drawn on, plus its outline. */
+    /** The near-black display a graph sits in, with its labels: a rounded
+        panel in the bed colour, as on Kitbox and Rackbox. Drawn over the whole
+        area - plot and axis gutters together - so the labels are part of the
+        display rather than printed on the body beside it. */
+    void paintDisplay (juce::Graphics&, const Theme&, juce::Rectangle<float> area);
+
+    /** The plot inside a display, given the display: the axis gutters taken
+        off the left and the bottom, and a little room at the top and right. */
+    juce::Rectangle<float> plotInDisplay (juce::Rectangle<float> display);
+
+    /** The bed under the plot itself. Since the display is already the bed
+        colour this draws nothing a person would see; it is kept so a page that
+        fills its plot with something else first (the sonogram) has one place
+        that says what "empty" looks like. */
     void paintBed (juce::Graphics&, const Theme&, juce::Rectangle<float> plot);
 
     /** Vertical lines at the decade and half-decade frequencies, with the

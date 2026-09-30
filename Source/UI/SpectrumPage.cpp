@@ -27,6 +27,28 @@ SpectrumPage::SpectrumPage (FXAnalyzerProcessor& processor) : PageBase (processo
                            " for that, raise FFT Size");
     freezeButton.setTooltip ("Hold the display");
 
+    // The channel the whole analyzer measures, one click from the curve.
+    const char* const channelTips[]
+    {
+        "Measure left and right together (L + R)",
+        "Measure the mid: what the two channels have in common",
+        "Measure the side: the difference between them - width, reverb, anything out of phase"
+    };
+
+    for (size_t i = 0; i < channelButtons.size(); ++i)
+    {
+        auto& button = channelButtons[i];
+        addAndMakeVisible (button);
+        button.setToggleMode (false);
+        button.setTooltip (juce::String (channelTips[i]) + ". Sets Channel for every page; L or R alone are in Settings");
+
+        button.onClick = [this, i] (bool)
+        {
+            plugin.setChoiceParameter (FXParams::channel, (int) channelChoices[i]);
+            syncChannelButtons();
+        };
+    }
+
     cursorButton.onClick = [this] (bool) { repaint(); };
 
     bassButton.onClick = [this] (bool state)
@@ -72,6 +94,9 @@ void SpectrumPage::setEmbedded (bool shouldBeEmbedded)
 
     for (auto* button : { &cursorButton, &bassButton, &freezeButton })
         button->setVisible (! embedded);
+
+    for (auto& button : channelButtons)
+        button.setVisible (! embedded);
 
     // A preview is looked at, not pointed into: no crosshair, and no clicks
     // taken from the Settings page around it.
@@ -132,6 +157,7 @@ void SpectrumPage::syncFromState()
 
     freezeButton.setToggleState (plugin.getBoolParameter (FXParams::freeze));
     bassButton.setToggleState (bassZoom);
+    syncChannelButtons();
 
     // The sonogram's colours are a mapping from this range, so a change of
     // range makes every row already drawn wrong. Discarding it is the honest
@@ -141,22 +167,40 @@ void SpectrumPage::syncFromState()
 }
 
 //==============================================================================
+juce::Rectangle<float> SpectrumPage::displayArea() const
+{
+    return getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY).toFloat();
+}
+
 juce::Rectangle<float> SpectrumPage::plotArea() const
 {
-    auto area = getLocalBounds().reduced (10, 10);
-    area.removeFromLeft (Layout::axisGutterLeft);
-    area.removeFromBottom (Layout::axisGutterBottom);
-
-    return area.toFloat();
+    return GraphAxes::plotInDisplay (displayArea());
 }
 
 void SpectrumPage::resized()
 {
     const auto plot = plotArea().toNearestInt();
 
-    freezeButton.setBounds (plot.getRight() - 46,  plot.getY() + 8, 38, 38);
-    bassButton.setBounds   (plot.getRight() - 94,  plot.getY() + 8, 38, 38);
-    cursorButton.setBounds (plot.getRight() - 142, plot.getY() + 8, 38, 38);
+    // Three small word buttons in the plot's top right corner, over the graph
+    // - in the band at the top where the spectrum is rarely drawn.
+    const int width = 58, height = 20, gap = 6;
+
+    freezeButton.setBounds (plot.getRight() - width,                 plot.getY() + 2, width, height);
+    bassButton.setBounds   (plot.getRight() - 2 * width - gap,       plot.getY() + 2, width, height);
+    cursorButton.setBounds (plot.getRight() - 3 * width - 2 * gap,   plot.getY() + 2, width, height);
+
+    // The channel buttons to the left of those, a wider gap between the two
+    // groups: these choose what is measured, the three on the right how it is
+    // looked at.
+    const int groupGap = 16;
+    const int channelWidth = 44;
+
+    for (size_t i = 0; i < channelButtons.size(); ++i)
+    {
+        const auto fromRight = (int) (channelButtons.size() - i);
+        channelButtons[i].setBounds (cursorButton.getX() - groupGap - fromRight * channelWidth - (fromRight - 1) * gap,
+                                     plot.getY() + 2, channelWidth, height);
+    }
 
     sonogramValid = false;
 }
@@ -170,8 +214,19 @@ void SpectrumPage::refresh()
         appendSonogramRow();
 
     freezeButton.setToggleState (plugin.getBoolParameter (FXParams::freeze));
+    syncChannelButtons();
 
     repaint();
+}
+
+void SpectrumPage::syncChannelButtons()
+{
+    // From the parameter every frame, so a change from Settings, automation or
+    // a restored session shows here too.
+    const auto channel = plugin.getChoiceParameter (FXParams::channel);
+
+    for (size_t i = 0; i < channelButtons.size(); ++i)
+        channelButtons[i].setToggleState (channel == (int) channelChoices[i]);
 }
 
 SpectrumPage::Reading SpectrumPage::sampleTier (int tierIndex, float lowHz, float highHz,
@@ -312,14 +367,15 @@ void SpectrumPage::appendSonogramRow()
         const auto proportion = juce::jlimit (0.0f, 1.0f,
                                               (db - bottomDb) / (topDb - bottomDb));
 
-        // Two-stop ramp through the theme's own colours: quiet is the graph
-        // bed, loud is the curve colour, and the top of the range runs on into
-        // the text colour so that a peak is distinguishable from merely loud.
+        // Two-stop ramp through the palette's own colours: quiet is the graph
+        // bed, loud is the curve's orange, and the top of the range runs on into
+        // the second trace's cream so that a peak is distinguishable from
+        // merely loud.
         // A rainbow map would be prettier and would encode level in hue, which
         // nobody can read back to a number.
         const auto colour = proportion < 0.75f
-            ? t.background.interpolatedWith (t.curve, proportion / 0.75f)
-            : t.curve.interpolatedWith (t.text, (proportion - 0.75f) / 0.25f);
+            ? t.bed.interpolatedWith (t.curve, proportion / 0.75f)
+            : t.curve.interpolatedWith (t.curveAlt, (proportion - 0.75f) / 0.25f);
 
         pixels.setPixelColour (x, sonogramRow, colour);
     }
@@ -336,15 +392,16 @@ void SpectrumPage::paint (juce::Graphics& g)
     g.setColour (t.background);
     g.fillRect (getLocalBounds());
 
+    GraphAxes::paintDisplay (g, t, displayArea());
     GraphAxes::paintBed (g, t, plot);
 
     auto dbStrip = juce::Rectangle<float> (plot.getX() - (float) Layout::axisGutterLeft,
                                            plot.getY(),
-                                           (float) Layout::axisGutterLeft - 6.0f,
+                                           (float) Layout::axisGutterLeft - 8.0f,
                                            plot.getHeight());
 
     auto freqStrip = juce::Rectangle<float> (plot.getX(), plot.getBottom() + 2.0f,
-                                             plot.getWidth(), (float) Layout::axisGutterBottom - 4.0f);
+                                             plot.getWidth(), (float) Layout::axisGutterBottom - 6.0f);
 
     // The step the range asks for, doubled until the labels have room. Only a
     // short graph ever doubles it - the Settings preview, a small window - and
@@ -352,7 +409,7 @@ void SpectrumPage::paint (juce::Graphics& g)
     // into the strip, so at 16 points per step "-6 dB" and "-16 dB" overlapped.
     auto gridStepDb = FXParams::spectrumGridStepDb (topDb - bottomDb);
 
-    while (plot.getHeight() * gridStepDb / (topDb - bottomDb) < t.axisSize * 1.8f
+    while (plot.getHeight() * gridStepDb / (topDb - bottomDb) < t.axisSize * 2.4f
            && gridStepDb < topDb - bottomDb)
         gridStepDb *= 2.0f;
 
@@ -425,16 +482,17 @@ void SpectrumPage::paint (juce::Graphics& g)
 
     const auto suppressed = wantsMulti && ! FXParams::multiResolutionAvailable (smoothingIndex);
 
-    g.setColour (suppressed ? t.warning : t.dimText());
+    g.setColour (suppressed ? t.warning : t.bedDim);
     g.setFont (t.axisFont());
-    // Up to the leftmost button and no further. The width used to be a flat
-    // 460, which was comfortable until the line grew a bass band on the end.
+    // Up to the leftmost button and no further, and onto a second line when it
+    // does not fit: with the bass band on the end and six buttons beside it the
+    // line is longer than the room, and a cut-off "1." says less than nothing.
     const auto infoWidth = embedded ? plot.getWidth() - 16.0f
-                                    : juce::jmax (200.0f, (float) cursorButton.getX() - plot.getX() - 16.0f);
+                                    : juce::jmax (200.0f, (float) channelButtons[0].getX() - plot.getX() - 16.0f);
 
-    g.drawText (suppressed ? info + "   Multi needs Bands (not Off)" : info,
-                juce::Rectangle<float> (plot.getX() + 8.0f, plot.getY() + 6.0f, infoWidth, 18.0f),
-                juce::Justification::centredLeft, false);
+    g.drawFittedText (suppressed ? info + "   Multi needs Bands (not Off)" : info,
+                      juce::Rectangle<float> (plot.getX() + 8.0f, plot.getY() + 6.0f, infoWidth, 28.0f).toNearestInt(),
+                      juce::Justification::topLeft, 2, 1.0f);
 
     if (cursorButton.getToggleState() && cursorInside && ! embedded)
         paintCursorReadout (g);
@@ -613,7 +671,7 @@ void SpectrumPage::paintCursorReadout (juce::Graphics& g) const
     // through, at any zoom.
     const auto db = readTiers (hz, nextHz, Source::measured).levelDb;
 
-    g.setColour (t.text.withAlpha (0.45f));
+    g.setColour (t.curveAlt.withAlpha (0.45f));
     g.fillRect ((float) cursorPosition.x, plot.getY(), 1.0f, plot.getHeight());
 
     // The note name matters more than it looks. A resonance at 98 Hz is a G,
@@ -625,21 +683,19 @@ void SpectrumPage::paintCursorReadout (juce::Graphics& g) const
                           + "   " + juce::String (db, 1) + " dB"
                           + "   " + note.name + juce::String (note.octave);
 
-    const auto width = juce::GlyphArrangement::getStringWidth (t.labelFont(), text) + 20.0f;
+    const auto font = Theme::numberFont (11.0f);
+    const auto width = juce::GlyphArrangement::getStringWidth (font, text) + 20.0f;
 
-    auto box = juce::Rectangle<float> (width, 26.0f)
+    auto box = juce::Rectangle<float> (width, 24.0f)
                    .withCentre ({ (float) cursorPosition.x, plot.getY() + 60.0f });
 
     box.setX (juce::jlimit (plot.getX() + 2.0f, plot.getRight() - width - 2.0f, box.getX()));
 
-    g.setColour (t.background.withAlpha (0.92f));
-    g.fillRoundedRectangle (box, 4.0f);
+    g.setColour (t.bedButton.withAlpha (0.95f));
+    g.fillRoundedRectangle (box, 5.0f);
 
-    g.setColour (t.accent);
-    g.drawRoundedRectangle (box, 4.0f, 1.0f);
-
-    g.setColour (t.text);
-    g.setFont (t.labelFont());
+    g.setColour (t.bedText);
+    g.setFont (font);
     g.drawText (text, box, juce::Justification::centred, false);
 }
 

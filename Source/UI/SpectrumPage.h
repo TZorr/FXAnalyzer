@@ -47,6 +47,8 @@
 
 #pragma once
 
+#include <array>
+
 #include "GraphAxes.h"
 #include "IconButton.h"
 #include "PageBase.h"
@@ -126,6 +128,7 @@ private:
     void paintCursorReadout (juce::Graphics&) const;
     void syncFromState();
 
+    juce::Rectangle<float> displayArea() const;
     juce::Rectangle<float> plotArea() const;
 
     FXParams::SpectrumMode   mode  = FXParams::SpectrumMode::curve;
@@ -154,6 +157,16 @@ private:
     IconButton     cursorButton { IconButton::Icon::magnifier };
     IconButton     bassButton   { IconButton::Icon::bass };
     IconButton     freezeButton { IconButton::Icon::snowflake };
+
+    /** L+R, Mid and Side, the three channel choices worth reaching for while
+        looking at the curve. They set the Channel parameter - the same one as
+        Settings > Input > Channel, which also offers L and R alone; with one
+        of those set, none of the three is lit. */
+    std::array<IconButton, 3> channelButtons { IconButton ("L+R"), IconButton ("MID"), IconButton ("SIDE") };
+    static constexpr FXParams::Channel channelChoices[3] { FXParams::Channel::leftPlusRight,
+                                                            FXParams::Channel::mid,
+                                                            FXParams::Channel::side };
+    void syncChannelButtons();
 
     std::vector<float> columnDb, columnPeakDb;
 

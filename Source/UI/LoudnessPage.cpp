@@ -4,6 +4,7 @@
 //
 
 #include "LoudnessPage.h"
+#include "GraphAxes.h"
 #include "../PluginProcessor.h"
 
 #include <cmath>
@@ -31,6 +32,7 @@ LoudnessPage::LoudnessPage (FXAnalyzerProcessor& processor) : PageBase (processo
     targetStepper.setItems (FXParams::loudnessTargetNames);
 
     resetButton.setToggleMode (false);
+    resetButton.setOnBed (false);
     resetButton.setTooltip ("Reset integrated loudness, range and held true peak");
 
     targetStepper.onChange = [this] (int index)
@@ -73,12 +75,12 @@ void LoudnessPage::refresh()
 //==============================================================================
 void LoudnessPage::resized()
 {
-    auto area = getLocalBounds().reduced (10, 10);
-    auto sideColumn = area.removeFromRight (Layout::sideColumnWidth).reduced (6, 0);
+    auto area = getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY);
+    auto sideColumn = area.removeFromRight (Layout::sideColumnWidth).withTrimmedLeft (10);
 
     layOutStepperColumn (sideColumn.removeFromTop (sideColumn.getHeight() / 3), { &targetStepper });
     sideColumn.removeFromTop (14);
-    resetButton.setBounds (sideColumn.removeFromTop (40).withSizeKeepingCentre (36, 36));
+    resetButton.setBounds (sideColumn.removeFromTop (22));
 }
 
 //==============================================================================
@@ -89,7 +91,7 @@ void LoudnessPage::paint (juce::Graphics& g)
     g.setColour (t.background);
     g.fillRect (getLocalBounds());
 
-    auto area = getLocalBounds().reduced (10, 10);
+    auto area = getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY);
     area.removeFromRight (Layout::sideColumnWidth);
 
     const auto& loudness = plugin.getAnalysis().getLoudness();
@@ -102,15 +104,22 @@ void LoudnessPage::paint (juce::Graphics& g)
     const auto settled    = loudness.hasIntegratedFor (FXParams::integratedSettleSeconds);
     const auto target     = FXParams::loudnessTargetValues[juce::jlimit (0, 3, targetIndex)];
 
+    // Two displays: the bars on the left, the numbers on the right.
+    auto barsDisplay = area.removeFromLeft (juce::roundToInt ((float) area.getWidth() * 0.38f)).toFloat();
+    area.removeFromLeft (10);
+    const auto numbersDisplay = area.toFloat();
+
+    GraphAxes::paintDisplay (g, t, barsDisplay);
+    GraphAxes::paintDisplay (g, t, numbersDisplay);
+
     // ---- The bars -------------------------------------------------------
-    auto barRow = area.removeFromLeft (juce::roundToInt ((float) area.getWidth() * 0.38f)).toFloat();
-    barRow = barRow.reduced (6.0f, 4.0f);
+    auto barRow = barsDisplay.reduced (8.0f, 14.0f);
 
     const auto barWidth = barRow.getWidth() / 3.0f;
 
     const juce::String barCaptions[] { "M", "S", "I" };
     const float barValues[] { momentary, shortTerm, integrated };
-    const juce::Colour barColours[] { t.curve, t.curveAlt, settled ? t.curve : t.accentDim() };
+    const juce::Colour barColours[] { t.curve, t.curveAlt, settled ? t.curve : t.bedDim };
 
     for (int i = 0; i < 3; ++i)
     {
@@ -119,8 +128,8 @@ void LoudnessPage::paint (juce::Graphics& g)
 
         paintBar (g, column, barValues[i], barColours[i]);
 
-        g.setColour (t.accent);
-        g.setFont (t.labelFont());
+        g.setColour (t.bedText);
+        g.setFont (Theme::numberFont (11.0f, true));
         g.drawText (barCaptions[i], caption, juce::Justification::centred, false);
     }
 
@@ -142,7 +151,7 @@ void LoudnessPage::paint (juce::Graphics& g)
     }
 
     // ---- The numbers ----------------------------------------------------
-    auto numbers = area.reduced (14, 4);
+    auto numbers = numbersDisplay.toNearestInt().reduced (20, 14);
 
     auto topHalf = numbers.removeFromTop (juce::roundToInt ((float) numbers.getHeight() * 0.52f));
 
@@ -152,7 +161,7 @@ void LoudnessPage::paint (juce::Graphics& g)
 
     paintReadout (g, topHalf.toFloat(), "INTEGRATED",
                   formatLoudness (integrated), "LUFS",
-                  46.0f, settled ? t.text : t.dimText());
+                  46.0f, settled ? t.bedText : t.bedDim);
 
     // A gap, so the target line belongs to the integrated block above it rather
     // than reading as a caption for the row below.
@@ -168,8 +177,8 @@ void LoudnessPage::paint (juce::Graphics& g)
     auto shortArea     = rightColumn.removeFromTop (rightColumn.getHeight() / 2);
     auto peakArea      = rightColumn;
 
-    paintReadout (g, momentaryArea.toFloat(), "MOMENTARY",  formatLoudness (momentary), "LUFS", 24.0f, t.text);
-    paintReadout (g, shortArea.toFloat(),     "SHORT TERM", formatLoudness (shortTerm), "LUFS", 24.0f, t.text);
+    paintReadout (g, momentaryArea.toFloat(), "MOMENTARY",  formatLoudness (momentary), "LUFS", 24.0f, t.bedText);
+    paintReadout (g, shortArea.toFloat(),     "SHORT TERM", formatLoudness (shortTerm), "LUFS", 24.0f, t.bedText);
 
     // Loudness range gates itself inside the meter - it reports silence until
     // it has a distribution rather than a handful of values - so the page just
@@ -179,12 +188,12 @@ void LoudnessPage::paint (juce::Graphics& g)
 
     paintReadout (g, rangeArea.toFloat(), "RANGE",
                   haveRange ? juce::String (lra, 1) : juce::String (juce::CharPointer_UTF8 ("\xe2\x80\x93")),
-                  haveRange ? "LU" : "", 24.0f, haveRange ? t.text : t.dimText());
+                  haveRange ? "LU" : "", 24.0f, haveRange ? t.bedText : t.bedDim);
 
     // True peak turns red at the point it starts to matter, which is -1 dBTP
     // rather than 0: that is the ceiling every streaming platform's encoder
     // needs, and a master that reads -0.3 dBTP will clip on their side.
-    const auto peakColour = peakDb > -1.0f ? t.warning : t.text;
+    const auto peakColour = peakDb > -1.0f ? t.warning : t.bedText;
     paintReadout (g, peakArea.toFloat(), "TRUE PEAK", formatLoudness (peakDb), "dBTP", 24.0f, peakColour);
 
     // ---- Distance to target ---------------------------------------------
@@ -193,8 +202,8 @@ void LoudnessPage::paint (juce::Graphics& g)
         const auto difference = integrated - target;
         const auto text = (difference >= 0.0f ? "+" : "") + juce::String (difference, 1) + " LU to target";
 
-        g.setColour (std::abs (difference) < 0.5f ? t.curve : t.dimText());
-        g.setFont (t.labelFont());
+        g.setColour (std::abs (difference) < 0.5f ? t.curveAlt : t.bedDim);
+        g.setFont (t.axisFont().withHeight (10.5f));
         g.drawText (text, targetLine.toFloat(), juce::Justification::centredLeft, false);
     }
 }
@@ -204,7 +213,7 @@ void LoudnessPage::paintBar (juce::Graphics& g, juce::Rectangle<float> area, flo
 {
     const auto& t = theme();
 
-    g.setColour (t.gridMinor());
+    g.setColour (t.grid);
     g.fillRoundedRectangle (area, 3.0f);
 
     if (lufs > -190.0f)
@@ -217,9 +226,6 @@ void LoudnessPage::paintBar (juce::Graphics& g, juce::Rectangle<float> area, flo
         g.setColour (colour);
         g.fillRoundedRectangle (filled, 3.0f);
     }
-
-    g.setColour (t.grid);
-    g.drawRoundedRectangle (area, 3.0f, 1.0f);
 }
 
 void LoudnessPage::paintReadout (juce::Graphics& g, juce::Rectangle<float> area,
@@ -230,12 +236,12 @@ void LoudnessPage::paintReadout (juce::Graphics& g, juce::Rectangle<float> area,
 
     auto captionArea = area.removeFromTop (juce::jmin (20.0f, area.getHeight() * 0.3f));
 
-    g.setColour (t.accent);
-    g.setFont (t.labelFont());
+    g.setColour (t.bedDim);
+    g.setFont (t.axisFont().withHeight (10.0f));
     g.drawText (caption, captionArea, juce::Justification::centredLeft, false);
 
-    const auto numberFont = t.numberFont (juce::jmin (textSize, area.getHeight() * 0.8f));
-    const auto unitFont   = t.font (juce::jmin (textSize * 0.5f, 20.0f), juce::Font::plain);
+    const auto numberFont = Theme::numberFont (juce::jmin (textSize, area.getHeight() * 0.8f), true);
+    const auto unitFont   = Theme::numberFont (juce::jmin (textSize * 0.45f, 14.0f));
 
     g.setColour (colour);
     g.setFont (numberFont);
@@ -245,7 +251,7 @@ void LoudnessPage::paintReadout (juce::Graphics& g, juce::Rectangle<float> area,
     {
         const auto numberWidth = juce::GlyphArrangement::getStringWidth (numberFont, value);
 
-        g.setColour (t.dimText());
+        g.setColour (t.bedDim);
         g.setFont (unitFont);
         g.drawText (unit, area.withTrimmedLeft (numberWidth + 8.0f),
                     juce::Justification::centredLeft, false);

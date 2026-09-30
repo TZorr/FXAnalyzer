@@ -55,13 +55,24 @@ float yToDecibels (float y, juce::Rectangle<float> plot, float topDb, float bott
 }
 
 //==============================================================================
+void paintDisplay (juce::Graphics& g, const Theme& theme, juce::Rectangle<float> area)
+{
+    g.setColour (theme.bed);
+    g.fillRoundedRectangle (area, 6.0f);
+}
+
+juce::Rectangle<float> plotInDisplay (juce::Rectangle<float> display)
+{
+    return display.withTrimmedLeft ((float) Layout::axisGutterLeft)
+                  .withTrimmedBottom ((float) Layout::axisGutterBottom)
+                  .withTrimmedTop (10.0f)
+                  .withTrimmedRight (14.0f);
+}
+
 void paintBed (juce::Graphics& g, const Theme& theme, juce::Rectangle<float> plot)
 {
-    g.setColour (theme.background);
+    g.setColour (theme.bed);
     g.fillRect (plot);
-
-    g.setColour (theme.grid);
-    g.drawRect (plot, 1.0f);
 }
 
 //==============================================================================
@@ -196,7 +207,7 @@ void paintFrequencyGrid (juce::Graphics& g, const Theme& theme,
 
         lastLabelRight = area.getRight();
 
-        g.setColour (theme.accent);
+        g.setColour (theme.bedDim);
         g.drawText (text, area, juce::Justification::centred, false);
     }
 }
@@ -223,7 +234,7 @@ void paintDecibelGrid (juce::Graphics& g, const Theme& theme,
 
         if (! labelStrip.isEmpty())
         {
-            g.setColour (theme.accent);
+            g.setColour (theme.bedDim);
 
             const auto text = (db > 0.0f ? "+" : "") + juce::String (juce::roundToInt (db)) + " dB";
 

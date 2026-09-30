@@ -4,6 +4,7 @@
 //
 
 #include "StereoPage.h"
+#include "GraphAxes.h"
 #include "../PluginProcessor.h"
 
 #include <cmath>
@@ -90,8 +91,8 @@ void StereoPage::collectPoints()
 //==============================================================================
 void StereoPage::resized()
 {
-    auto area = getLocalBounds().reduced (10, 10);
-    auto sideColumn = area.removeFromRight (Layout::sideColumnWidth).reduced (6, 0);
+    auto area = getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY);
+    auto sideColumn = area.removeFromRight (Layout::sideColumnWidth).withTrimmedLeft (10);
 
     layOutStepperColumn (sideColumn, { &modeStepper, &zoomStepper });
 }
@@ -103,16 +104,21 @@ void StereoPage::paint (juce::Graphics& g)
     g.setColour (t.background);
     g.fillRect (getLocalBounds());
 
-    auto area = getLocalBounds().reduced (10, 10);
+    auto area = getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY);
     area.removeFromRight (Layout::sideColumnWidth);
 
-    // The goniometer is square; whatever is left over carries the numbers.
+    // The goniometer is square, in a display of its own; whatever is left over
+    // is a second display carrying the numbers.
     const auto size = juce::jmin (area.getHeight(), area.getWidth() / 2);
-    auto scopeArea = area.removeFromLeft (size).withSizeKeepingCentre (size, size).toFloat();
+    auto scopeDisplay = area.removeFromLeft (size).withSizeKeepingCentre (size, size).toFloat();
+    area.removeFromLeft (10);
 
-    paintGoniometer (g, scopeArea);
+    GraphAxes::paintDisplay (g, t, scopeDisplay);
+    GraphAxes::paintDisplay (g, t, area.toFloat());
 
-    auto right = area.reduced (16, 8);
+    paintGoniometer (g, scopeDisplay.reduced (8.0f));
+
+    auto right = area.reduced (20, 14);
     auto correlationArea = right.removeFromTop (juce::roundToInt ((float) right.getHeight() * 0.34f)).toFloat();
 
     paintCorrelation (g, correlationArea);
@@ -123,9 +129,6 @@ void StereoPage::paint (juce::Graphics& g)
 void StereoPage::paintGoniometer (juce::Graphics& g, juce::Rectangle<float> area) const
 {
     const auto& t = theme();
-
-    g.setColour (t.background);
-    g.fillRect (area);
 
     const auto centre = area.getCentre();
     const auto radius = area.getWidth() * 0.5f - 6.0f;
@@ -151,7 +154,7 @@ void StereoPage::paintGoniometer (juce::Graphics& g, juce::Rectangle<float> area
     g.drawLine (centre.x - diagonal, centre.y - diagonal, centre.x + diagonal, centre.y + diagonal, 1.0f);
     g.drawLine (centre.x - diagonal, centre.y + diagonal, centre.x + diagonal, centre.y - diagonal, 1.0f);
 
-    g.setColour (t.dimText());
+    g.setColour (t.bedDim);
     g.setFont (t.axisFont());
     g.drawText ("M", juce::Rectangle<float> (40.0f, 16.0f).withCentre ({ centre.x, area.getY() + 10.0f }),
                 juce::Justification::centred, false);
@@ -218,13 +221,13 @@ void StereoPage::paintCorrelation (juce::Graphics& g, juce::Rectangle<float> are
 
     auto caption = area.removeFromTop (18.0f);
 
-    g.setColour (t.accent);
-    g.setFont (t.labelFont());
+    g.setColour (t.bedDim);
+    g.setFont (t.axisFont().withHeight (10.0f));
     g.drawText ("CORRELATION", caption, juce::Justification::centredLeft, false);
 
     auto bar = area.removeFromTop (22.0f);
 
-    g.setColour (t.gridMinor());
+    g.setColour (t.grid);
     g.fillRoundedRectangle (bar, 3.0f);
 
     const auto centreX = bar.getCentreX();
@@ -238,20 +241,19 @@ void StereoPage::paintCorrelation (juce::Graphics& g, juce::Rectangle<float> are
     g.fillRoundedRectangle (juce::Rectangle<float> (juce::jmin (centreX, centreX + extent), bar.getY(),
                                                     std::abs (extent), bar.getHeight()), 3.0f);
 
-    g.setColour (t.grid);
-    g.drawRoundedRectangle (bar, 3.0f, 1.0f);
-    g.fillRect (centreX - 0.5f, bar.getY(), 1.0f, bar.getHeight());
+    g.setColour (t.bedDim);
+    g.fillRect (centreX - 0.5f, bar.getY() - 2.0f, 1.0f, bar.getHeight() + 4.0f);
 
     auto scale = area.removeFromTop (18.0f);
 
-    g.setColour (t.dimText());
+    g.setColour (t.bedDim);
     g.setFont (t.axisFont());
     g.drawText ("-1", scale, juce::Justification::centredLeft, false);
     g.drawText ("0",  scale, juce::Justification::centred, false);
     g.drawText ("+1", scale, juce::Justification::centredRight, false);
 
-    g.setColour (t.text);
-    g.setFont (t.numberFont (26.0f));
+    g.setColour (correlation < 0.0f ? t.warning : t.bedText);
+    g.setFont (Theme::numberFont (26.0f, true));
     g.drawText (juce::String (correlation, 2), area, juce::Justification::centredLeft, false);
 }
 
@@ -267,12 +269,12 @@ void StereoPage::paintReadouts (juce::Graphics& g, juce::Rectangle<float> area) 
     {
         auto captionArea = bounds.removeFromTop (16.0f);
 
-        g.setColour (t.accent);
-        g.setFont (t.labelFont());
+        g.setColour (t.bedDim);
+        g.setFont (t.axisFont().withHeight (10.0f));
         g.drawText (caption, captionArea, juce::Justification::centredLeft, false);
 
-        g.setColour (t.text);
-        g.setFont (t.numberFont (22.0f));
+        g.setColour (t.bedText);
+        g.setFont (Theme::numberFont (20.0f, true));
         g.drawText (value, bounds, juce::Justification::centredLeft, false);
     };
 
@@ -290,7 +292,7 @@ void StereoPage::paintReadouts (juce::Graphics& g, juce::Rectangle<float> area) 
     row (area.removeFromTop (rowHeight), "WIDTH",
          width <= -40.0f ? juce::String ("Mono") : juce::String (width, 1) + " dB S/M");
 
-    g.setColour (t.dimText());
+    g.setColour (t.bedDim);
     g.setFont (t.axisFont());
     g.drawText ("Measured on L and R, before the Channel selector",
                 area.removeFromTop (18.0f), juce::Justification::centredLeft, false);

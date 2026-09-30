@@ -31,33 +31,15 @@ void StepperControl::setCompact (bool shouldBeCompact)
 
 float StepperControl::valueTextHeight() const
 {
-    // Compact steppers set their value at the heading size - the same size as
-    // the "Mode" and "Scale" labels above them. Larger than the heading was the
-    // first attempt and it fought the graph for attention; matching it makes
-    // the column read as chrome, which is what it is.
-    return compact ? theme().labelSize : theme().valueSize;
+    return theme().valueSize;
 }
 
 int StepperControl::getPreferredHeight() const
 {
-    const auto text = valueTextHeight();
-
-    // The compact size is tighter than a proportional shrink of the large one,
-    // and deliberately so. It has to hold five steppers in the height of a
-    // graph, and at the large proportions five of them fill the column edge to
-    // edge with nothing between - a row of controls that touch reads as one
-    // block rather than five, which is exactly what a column of separate
-    // choices must not look like. The looser large proportions stay where they
-    // are: the Settings page has room, and there the value is the content.
-    const auto labelFactor   = compact ? 1.35f : 1.6f;
-    const auto chevronFactor = compact ? 1.15f : 1.3f;
-    const auto valueFactor   = compact ? 1.50f : 1.7f;
-
-    const auto labelRow   = label.isEmpty() ? 0.0f : theme().labelSize * labelFactor;
-    const auto chevronRow = text * chevronFactor;
-    const auto valueRow   = text * valueFactor;
-
-    return juce::roundToInt (labelRow + chevronRow * 2.0f + valueRow);
+    // Rackbox's StepButton with its name over it: the label row, a gap, and
+    // the button. Compact and full size are the same since 0.2 - the value is
+    // on a button now, and a button has one height on this panel.
+    return (label.isEmpty() ? 0 : labelRowHeight + labelGap) + buttonHeight;
 }
 
 void StepperControl::setItems (const juce::StringArray& newItems)
@@ -129,22 +111,18 @@ void StepperControl::resized()
 {
     auto area = getLocalBounds();
 
-    labelArea = label.isEmpty()
-                    ? juce::Rectangle<int>()
-                    : area.removeFromTop (juce::roundToInt (theme().labelSize * (compact ? 1.35f : 1.6f)));
+    if (label.isEmpty())
+    {
+        labelArea = {};
+    }
+    else
+    {
+        labelArea = area.removeFromTop (labelRowHeight);
+        area.removeFromTop (labelGap);
+    }
 
-    // The chevrons take a share proportional to the type rather than an equal
-    // third: the value is the thing being read, and a value squeezed between
-    // two arrows of the same height reads as one of three rows rather than as
-    // the answer. Tying the share to the font is what makes the compact size a
-    // single switch instead of a second set of numbers to keep in step.
-    const auto chevronHeight = juce::jlimit (10, area.getHeight() / 3,
-                                             juce::roundToInt (valueTextHeight()
-                                                                   * (compact ? 1.15f : 1.3f)));
-
-    upArea    = area.removeFromTop (chevronHeight);
-    downArea  = area.removeFromBottom (chevronHeight);
-    valueArea = area;
+    valueArea = area.removeFromTop (juce::jmin (buttonHeight, area.getHeight()));
+    upArea = downArea = {};
 }
 
 void StepperControl::paint (juce::Graphics& g)
@@ -153,40 +131,39 @@ void StepperControl::paint (juce::Graphics& g)
 
     if (! label.isEmpty())
     {
-        g.setColour (t.accent);
+        g.setColour (t.label);
         g.setFont (t.labelFont());
-        g.drawText (label, labelArea, juce::Justification::centred, false);
+        g.drawText (label.toUpperCase(), labelArea, juce::Justification::centred, false);
     }
 
-    const auto enabled = isNumeric() || items.size() > 1;
+    const auto live = isNumeric() || items.size() > 1;
+    const auto hovered = live && hoverZone != Zone::none;
+    const auto button = valueArea.toFloat();
 
-    drawChevron (g, upArea.toFloat(),   true,  enabled && hoverZone == Zone::up);
-    drawChevron (g, downArea.toFloat(), false, enabled && hoverZone == Zone::down);
+    g.setColour (hovered ? t.buttonHover : t.button);
+    g.fillRoundedRectangle (button, 5.0f);
 
-    g.setColour (t.text);
-    g.setFont (t.font (valueTextHeight(), juce::Font::plain));
-    g.drawText (getSelectedText(), valueArea, juce::Justification::centred, false);
+    g.setColour (live ? t.text : t.label);
+    g.setFont (t.valueFont());
+    g.drawText (getSelectedText(), button.reduced (4.0f, 0.0f), juce::Justification::centred, true);
+
+    // Which way a click will go, shown on the half the pointer is over: the
+    // upper half of the control steps up, the lower half down. A small mark at
+    // the button's right edge rather than two permanent arrows - the arrows
+    // took 18 of the 47 points a stepper had and the value 11.
+    if (hovered)
+        drawChevron (g, button.withTrimmedLeft (button.getWidth() - 14.0f).reduced (0.0f, 4.0f),
+                     hoverZone == Zone::up, true);
 }
 
 void StepperControl::drawChevron (juce::Graphics& g, juce::Rectangle<float> area,
-                                  bool pointingUp, bool highlighted) const
+                                  bool pointingUp, bool) const
 {
     const auto& t = theme();
 
-    // The chevron is drawn from the area's centre outwards so that it stays put
-    // when the row it lives in changes height; anchoring it to an edge makes
-    // the two arrows drift apart as the window is resized.
-    //
-    // Its size comes from the value's type, not from the space it happens to
-    // have been given. The ratios are the ones the large size was drawn at, so
-    // nothing moves there - and the compact size gets arrows that match its own
-    // font rather than the full-size ones shrunk only by whatever the column
-    // width happened to clip off.
-    const auto text = valueTextHeight();
-
-    const auto width  = juce::jmin (area.getWidth() * 0.42f, text * 1.05f);
-    const auto height = juce::jmin (area.getHeight() * 0.5f, text * 0.52f);
     const auto centre = area.getCentre();
+    const auto width  = 3.5f;
+    const auto height = 3.0f;
 
     juce::Path chevron;
 
@@ -203,19 +180,17 @@ void StepperControl::drawChevron (juce::Graphics& g, juce::Rectangle<float> area
         chevron.lineTo (centre.x + width, centre.y - height * 0.5f);
     }
 
-    const auto live = isNumeric() || items.size() > 1;
-    g.setColour (live ? (highlighted ? t.text : t.accent) : t.accentDim());
-    g.strokePath (chevron, juce::PathStrokeType (juce::jmax (1.4f, text * 0.125f),
-                                                 juce::PathStrokeType::curved,
+    g.setColour (t.text);
+    g.strokePath (chevron, juce::PathStrokeType (1.4f, juce::PathStrokeType::curved,
                                                  juce::PathStrokeType::rounded));
 }
 
 //==============================================================================
 StepperControl::Zone StepperControl::zoneAt (juce::Point<int> position) const
 {
-    // The value area splits between the two arrows rather than being dead
-    // space. Half the panel's hit targets are 26 pixels tall, and a dead strip
-    // between them is a click that does nothing for no reason the user can see.
+    // The whole control splits at the button's middle: anything above steps
+    // up, including the label, anything below steps down. No dead strip - a
+    // click that does nothing for no reason the user can see is the worst kind.
     if (position.y < valueArea.getCentreY())
         return Zone::up;
 

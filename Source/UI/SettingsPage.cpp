@@ -16,24 +16,26 @@ SettingsPage::SettingsPage (FXAnalyzerProcessor& processor)
 
     topRow =
     {
-        { "RESOLUTION", { &resolutionStepper, &fftSizeStepper, &bandsStepper }, {} },
-        { "RANGE",      { &topStepper, &rangeStepper },                          {} },
-        { "DISPLAY",    { &viewStepper, &scaleStepper, &themeStepper },          {} }
+        { "RESOLUTION", { &resolutionStepper, &fftSizeStepper, &bandsStepper }, {}, {} },
+        { "RANGE",      { &topStepper, &rangeStepper },                          {}, {} },
+        { "DISPLAY",    { &viewStepper, &scaleStepper },                         {}, {} }
     };
 
     bottomRow =
     {
-        { "SMOOTHING",  { &reactivityStepper, &attackStepper, &releaseStepper }, {} },
-        { "TILT",       { &slopeStepper, &pivotStepper },                        {} },
-        { "INPUT",      { &channelStepper, &dcBlockStepper, &inputGainStepper }, {} }
+        { "SMOOTHING",  { &reactivityStepper, &attackStepper, &releaseStepper }, {}, {} },
+        { "TILT",       { &slopeKnob, &pivotStepper },                           {}, {} },
+        { "INPUT",      { &channelStepper, &dcBlockStepper, &inputGainKnob },    {}, {} }
     };
 
     // Compact, all of them. See the file header for why the large size had to go.
     for (auto* stepper : allSteppers())
-    {
         stepper->setCompact (true);
-        addAndMakeVisible (*stepper);
-    }
+
+    for (auto* row : { &topRow, &bottomRow })
+        for (const auto& group : *row)
+            for (auto* control : group.controls)
+                addAndMakeVisible (*control);
 
     // ---- RESOLUTION ---------------------------------------------------------
     resolutionStepper.setLabel ("Mode");
@@ -53,10 +55,12 @@ SettingsPage::SettingsPage (FXAnalyzerProcessor& processor)
     rangeStepper.setItems (FXParams::spectrumRangeNames);
 
     // ---- TILT ---------------------------------------------------------------
-    slopeStepper.setLabel ("Slope");
-    slopeStepper.setNumericRange (FXParams::spectrumTiltMinDb, FXParams::spectrumTiltMaxDb,
-                                  FXParams::spectrumTiltStepDb, FXParams::defaultSpectrumTiltDb(),
-                                  [] (float db) { return SpectrumPage::formatTilt (db); });
+    // A knob since 0.2: the one continuous display setting. Snapped to the
+    // half-decibel steps the stepper took, which is as finely as a tilt is
+    // worth choosing; double-click returns to the default.
+    slopeKnob.setRange (FXParams::spectrumTiltMinDb, FXParams::spectrumTiltMaxDb, FXParams::spectrumTiltStepDb);
+    slopeKnob.setDoubleClickReturnValue (true, FXParams::defaultSpectrumTiltDb());
+    slopeKnob.textFromValueFunction = [] (double db) { return SpectrumPage::formatTilt ((float) db); };
 
     pivotStepper.setLabel ("Pivot");
     pivotStepper.setItems (FXParams::spectrumTiltPivotNames);
@@ -78,14 +82,14 @@ SettingsPage::SettingsPage (FXAnalyzerProcessor& processor)
     dcBlockStepper.setLabel ("DC Block");
     dcBlockStepper.setItems ({ "Off", "On" });
 
-    inputGainStepper.setLabel ("Input Gain");
-
-    // Numeric rather than a list of choices - see StepperControl::setNumericRange.
-    // One click is a decibel, shift a tenth, alt-click back to unity.
-    inputGainStepper.setNumericRange (FXParams::inputGainMinDb, FXParams::inputGainMaxDb,
-                                      1.0f, 0.0f,
-                                      [] (float db)
+    // A knob since 0.2, bipolar from unity. Continuous, to a tenth of a
+    // decibel, because it is an automatable parameter and quantising it would
+    // snap every automation curve to the steps. Double-click returns to 0 dB.
+    inputGainKnob.setRange (FXParams::inputGainMinDb, FXParams::inputGainMaxDb, 0.1);
+    inputGainKnob.setDoubleClickReturnValue (true, 0.0);
+    inputGainKnob.textFromValueFunction = [] (double value)
     {
+        const auto db = (float) value;
         const auto rounded = std::abs (db) < 0.05f ? 0.0f : db;
 
         if (std::abs (rounded - std::round (rounded)) < 0.05f)
@@ -93,7 +97,7 @@ SettingsPage::SettingsPage (FXAnalyzerProcessor& processor)
                                    : (rounded > 0.0f ? "+" : "") + juce::String ((int) std::round (rounded)) + " dB";
 
         return (rounded > 0.0f ? "+" : "") + juce::String (rounded, 1) + " dB";
-    });
+    };
 
     // ---- DISPLAY ------------------------------------------------------------
     viewStepper.setLabel ("View");
@@ -101,16 +105,6 @@ SettingsPage::SettingsPage (FXAnalyzerProcessor& processor)
 
     scaleStepper.setLabel ("Scale");
     scaleStepper.setItems (FXParams::frequencyScaleNames);
-
-    themeStepper.setLabel ("Theme");
-    {
-        juce::StringArray names;
-
-        for (const auto& theme : builtInThemes())
-            names.add (theme.name);
-
-        themeStepper.setItems (names);
-    }
 
     //==============================================================================
     // Every callback guards on `syncing`, because syncFromState() sets the
@@ -175,12 +169,12 @@ SettingsPage::SettingsPage (FXAnalyzerProcessor& processor)
         updatePreview();
     };
 
-    slopeStepper.onNumericChange = [this] (float value)
+    slopeKnob.onValueChange = [this]
     {
         if (syncing)
             return;
 
-        plugin.setSpectrumTiltDb (value);
+        plugin.setSpectrumTiltDb ((float) slopeKnob.getValue());
         updatePreview();
     };
 
@@ -234,13 +228,15 @@ SettingsPage::SettingsPage (FXAnalyzerProcessor& processor)
             plugin.setBoolParameter (FXParams::dcBlock, index == 1);
     };
 
-    inputGainStepper.onGestureStart = [this] { plugin.beginGesture (FXParams::inputGainDb); };
-    inputGainStepper.onGestureEnd   = [this] { plugin.endGesture   (FXParams::inputGainDb); };
+    // A drag, a wheel step and a double-click all arrive between these two, so
+    // the host sees each as one gesture.
+    inputGainKnob.onDragStart = [this] { plugin.beginGesture (FXParams::inputGainDb); };
+    inputGainKnob.onDragEnd   = [this] { plugin.endGesture   (FXParams::inputGainDb); };
 
-    inputGainStepper.onNumericChange = [this] (float value)
+    inputGainKnob.onValueChange = [this]
     {
         if (! syncing)
-            plugin.setFloatParameter (FXParams::inputGainDb, value);
+            plugin.setFloatParameter (FXParams::inputGainDb, (float) inputGainKnob.getValue());
     };
 
     // The Spectrum page's own rule, kept: a sonogram carries history drawn on
@@ -266,17 +262,6 @@ SettingsPage::SettingsPage (FXAnalyzerProcessor& processor)
         updatePreview();
     };
 
-    themeStepper.onChange = [this] (int index)
-    {
-        if (syncing)
-            return;
-
-        const auto& themes = builtInThemes();
-        plugin.setTheme (themes[(size_t) juce::jlimit (0, (int) themes.size() - 1, index)]);
-
-        if (onThemeSelected != nullptr)
-            onThemeSelected();
-    };
 }
 
 std::vector<StepperControl*> SettingsPage::allSteppers()
@@ -285,7 +270,9 @@ std::vector<StepperControl*> SettingsPage::allSteppers()
 
     for (auto* row : { &topRow, &bottomRow })
         for (const auto& group : *row)
-            steppers.insert (steppers.end(), group.controls.begin(), group.controls.end());
+            for (auto* control : group.controls)
+                if (auto* stepper = dynamic_cast<StepperControl*> (control))
+                    steppers.push_back (stepper);
 
     return steppers;
 }
@@ -351,7 +338,8 @@ void SettingsPage::syncFromState()
                                               FXParams::spectrumRangeNames.size()),
                                    juce::dontSendNotification);
 
-    slopeStepper.setNumericValue (plugin.getSpectrumTiltDb(), juce::dontSendNotification);
+    if (! slopeKnob.isMouseButtonDown())
+        slopeKnob.setValue (plugin.getSpectrumTiltDb(), juce::dontSendNotification);
 
     pivotStepper.setSelectedIndex (viewIndex (FXParams::propSpectrumTiltPivot,
                                               FXParams::defaultSpectrumTiltPivotIndex,
@@ -370,7 +358,9 @@ void SettingsPage::syncFromState()
 
     channelStepper.setSelectedIndex (plugin.getChoiceParameter (FXParams::channel), juce::dontSendNotification);
     dcBlockStepper.setSelectedIndex (plugin.getBoolParameter (FXParams::dcBlock) ? 1 : 0, juce::dontSendNotification);
-    inputGainStepper.setNumericValue (plugin.getFloatParameter (FXParams::inputGainDb), juce::dontSendNotification);
+
+    if (! inputGainKnob.isMouseButtonDown())
+        inputGainKnob.setValue (plugin.getFloatParameter (FXParams::inputGainDb), juce::dontSendNotification);
 
     viewStepper.setSelectedIndex (FXParams::spectrumModeToStepIndex (
                                       viewIndex (FXParams::propSpectrumMode, 0, FXParams::lastSpectrumMode + 1)),
@@ -378,13 +368,6 @@ void SettingsPage::syncFromState()
 
     scaleStepper.setSelectedIndex (viewIndex (FXParams::propSpectrumScale, 0, FXParams::frequencyScaleNames.size()),
                                    juce::dontSendNotification);
-
-    const auto themeName = plugin.getTheme().name;
-    const auto& themes = builtInThemes();
-
-    for (size_t i = 0; i < themes.size(); ++i)
-        if (themes[i].name == themeName)
-            themeStepper.setSelectedIndex ((int) i, juce::dontSendNotification);
 }
 
 //==============================================================================
@@ -395,41 +378,38 @@ void SettingsPage::paint (juce::Graphics& g)
     g.setColour (t.background);
     g.fillRect (getLocalBounds());
 
-    // Group titles with a hairline under each, spanning the group. The rule is
-    // what makes three steppers read as one group rather than as three
-    // neighbours, and it is drawn in the dim text colour rather than the grid
-    // colour because several themes set the grid so faint that it would carry
-    // the grouping only on the default one.
-    g.setFont (Theme::font (t.axisSize, juce::Font::bold));
-
+    // Kitbox's sections: a recessed panel per group, its name in the top left.
+    // The panel is what makes three controls read as one group rather than as
+    // three neighbours.
     for (auto* row : { &topRow, &bottomRow })
     {
         for (const auto& group : *row)
         {
-            if (group.titleArea.isEmpty())
+            if (group.sectionArea.isEmpty())
                 continue;
 
-            g.setColour (t.dimText());
-            g.drawText (group.title, group.titleArea.withTrimmedLeft (4),
-                        juce::Justification::centredLeft, false);
+            g.setColour (t.section);
+            g.fillRoundedRectangle (group.sectionArea.toFloat(), 6.0f);
 
-            g.setColour (t.dimText().withMultipliedAlpha (0.55f));
-            g.fillRect (group.titleArea.getX(), group.titleArea.getBottom() - 1,
-                        group.titleArea.getWidth(), 1);
+            g.setColour (t.text);
+            g.setFont (Theme::labelFontAt (10.0f));
+            g.drawText (group.title, group.titleArea, juce::Justification::centredLeft, false);
         }
     }
 }
 
 void SettingsPage::resized()
 {
-    auto area = getLocalBounds().reduced (16, 8);
+    auto area = getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY);
 
-    // Every stepper is the same kind, so one preferred height serves them all.
-    const auto stepperHeight = resolutionStepper.getPreferredHeight();
-    const auto titleHeight   = juce::roundToInt (theme().axisSize * 1.7f);
-    const auto rowHeight     = titleHeight + 2 + stepperHeight;
-    const auto rowGap        = 6;
-    const auto groupGap      = 16;
+    const auto titleHeight = 24;
+
+    // 88 where there is room, 78 in a small window: the ten points a row gives
+    // up there are what keep the preview above its 90 point floor at three
+    // quarters size, and the preview is worth more than ten points of knob.
+    const auto rowHeight   = area.getHeight() >= 2 * 88 + 8 + 10 + 90 ? 88 : 78;
+    const auto rowGap      = 8;
+    const auto groupGap    = 10;
 
     const auto controlsHeight = rowHeight * 2 + rowGap;
 
@@ -437,15 +417,17 @@ void SettingsPage::resized()
     // height it is hidden rather than squeezed: a graph thirty points tall has
     // no curve in it anyone could tune against, and the controls are the part
     // of this page that must survive a small window.
-    const auto previewHeight = area.getHeight() - controlsHeight - 8;
+    const auto previewHeight = area.getHeight() - controlsHeight - 10;
     const auto showPreview   = previewHeight >= 90;
 
     preview.setVisible (showPreview);
 
     if (showPreview)
     {
-        preview.setBounds (area.removeFromTop (previewHeight).expanded (6, 0));
-        area.removeFromTop (8);
+        // The preview is a SpectrumPage and keeps the page margin itself, so
+        // it is given the margin back to draw its display where this area is.
+        preview.setBounds (area.removeFromTop (previewHeight).expanded (Layout::pageMarginX, Layout::pageMarginY));
+        area.removeFromTop (10);
     }
     else
     {
@@ -453,33 +435,39 @@ void SettingsPage::resized()
         area = area.withSizeKeepingCentre (area.getWidth(), juce::jmin (area.getHeight(), controlsHeight));
     }
 
-    // Both rows hold eight controls in groups of 3-2-3, so the columns are one
-    // width across the page, a stepper in the upper row sits over one in the
-    // lower row, and the two gaps between groups fall in the same place.
+    // Both rows are cut into the same eight columns, grouped 3-2-3, so a
+    // control in the upper row sits over one in the lower row and the gaps
+    // between sections fall in the same place. Display has two controls since
+    // the theme went; its section keeps the three-column width anyway.
+    static constexpr int columnsPerGroup[] { 3, 2, 3 };
+
     const auto layOutRow = [&] (juce::Rectangle<int> row, std::vector<Group>& groups)
     {
-        int columns = 0;
+        const auto columnWidth = (row.getWidth() - 2 * groupGap) / 8;
 
-        for (const auto& group : groups)
-            columns += (int) group.controls.size();
-
-        if (columns == 0)
-            return;
-
-        const auto gaps        = (int) groups.size() - 1;
-        const auto columnWidth = (row.getWidth() - gaps * groupGap) / columns;
-
-        for (auto& group : groups)
+        for (size_t i = 0; i < groups.size(); ++i)
         {
-            auto groupArea = row.removeFromLeft (columnWidth * (int) group.controls.size());
+            auto& group = groups[i];
+            const auto columns = columnsPerGroup[juce::jmin ((size_t) 2, i)];
+
+            auto section = i + 1 == groups.size() ? row : row.removeFromLeft (columnWidth * columns);
             row.removeFromLeft (groupGap);
 
-            group.titleArea = groupArea.removeFromTop (titleHeight);
-            groupArea.removeFromTop (2);
+            group.sectionArea = section;
+
+            auto inner = section.reduced (6, 0);
+            group.titleArea = inner.removeFromTop (titleHeight).withTrimmedLeft (4);
+            inner.removeFromBottom (2);
 
             for (auto* control : group.controls)
-                control->setBounds (groupArea.removeFromLeft (columnWidth)
-                                             .withSizeKeepingCentre (columnWidth - 6, stepperHeight));
+            {
+                auto cell = inner.removeFromLeft (columnWidth).reduced (4, 0);
+
+                if (auto* stepper = dynamic_cast<StepperControl*> (control))
+                    stepper->setBounds (cell.withSizeKeepingCentre (cell.getWidth(), stepper->getPreferredHeight()));
+                else
+                    control->setBounds (cell);
+            }
         }
     };
 

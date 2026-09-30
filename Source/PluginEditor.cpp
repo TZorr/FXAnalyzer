@@ -42,14 +42,11 @@ FXAnalyzerEditor::FXAnalyzerEditor (FXAnalyzerProcessor& processorToUse)
     for (auto* page : pages)
         addChildComponent (*page);
 
-    header.setTitle ("FX Analyzer");
     header.onMenuClicked   = [this] { showMenu(); };
     header.onPresetClicked = [this] { showPresetMenu(); };
 
     tabs.setTabs (FXParams::pageNames);
     tabs.onChange = [this] (int index) { selectPage (index, "tab click"); };
-
-    settingsPage.onThemeSelected = [this] { applyTheme(); };
 
     // A tooltip is something to read, never something to click. JUCE's
     // TooltipWindow is always on top and does not turn off mouse interception
@@ -106,7 +103,6 @@ FXAnalyzerEditor::~FXAnalyzerEditor()
     // whole class of bug this change is about.
     stopTimer();
     plugin.removeChangeListener (this);
-    colourWindow.reset();
 }
 
 void FXAnalyzerEditor::record (const juce::String& what)
@@ -183,13 +179,9 @@ void FXAnalyzerEditor::changeListenerCallback (juce::ChangeBroadcaster*)
 {
     // Always the message thread, whatever thread the change came from.
     //
-    // The theme is only half of it. This fires when a host restores a session,
-    // and a restore changes every view setting the panel holds - which page is
-    // open, the scale, the slope, the dB range. Repainting in the new colours
-    // while still showing the old settings is worse than not reloading at all,
-    // because it looks like the session loaded.
-    applyTheme();
-
+    // This fires when a host restores a session, and a restore changes every
+    // view setting the panel holds - which page is open, the scale, the slope,
+    // the dB range.
     selectPage ((int) plugin.getViewProperty (FXParams::propPage, 0), "host state");
 
     if (auto* page = currentPage())
@@ -226,19 +218,13 @@ void FXAnalyzerEditor::unmuteStandaloneInput()
 
 void FXAnalyzerEditor::applyTheme()
 {
-    theme = plugin.getTheme();
-
+    // One fixed design since 0.2, handed down once. ThemedComponent passes it
+    // on to every child, so no widget can hold a colour of its own.
     header.setTheme (theme);
     tabs.setTheme (theme);
 
     for (auto* page : pages)
         page->setTheme (theme);
-
-    // The colour editor is themed like everything else, which is what makes it
-    // repaint itself while a colour is being dragged - it is showing the very
-    // theme it is editing.
-    if (auto* content = colourEditorContent())
-        content->setTheme (theme);
 
     resized();
     repaint();
@@ -280,6 +266,19 @@ void FXAnalyzerEditor::selectPage (int index, const char* reason)
     tabs.setSelectedIndex (clamped, juce::dontSendNotification);
     plugin.setViewProperty (FXParams::propPage, clamped);
 
+    // What each page is for, in one line under its name in the header display.
+    static const char* const descriptions[FXParams::numPages]
+    {
+        "Level over frequency. Every setting is on the Settings page",
+        "The waveform over time, left in orange and right in cream",
+        "EBU R128 loudness to BS.1770-4, and true peak",
+        "Goniometer, correlation, balance and width",
+        "The note being played, and how far off it is",
+        "Every display setting, over a live preview of the spectrum"
+    };
+
+    header.setPage (FXParams::pageNames[clamped], descriptions[clamped]);
+
     for (int i = 0; i < FXParams::numPages; ++i)
         pages[(size_t) i]->setVisible (i == clamped);
 
@@ -301,11 +300,15 @@ void FXAnalyzerEditor::paint (juce::Graphics& g)
 
     g.fillAll (theme.background);
 
-    // The hairline round the panel. It is the one piece of chrome here, and it
-    // exists because a plugin window in a host has no frame of its own: without
-    // it the panel bleeds into whatever grey the host paints behind it.
-    g.setColour (theme.grid);
-    g.drawRect (getLocalBounds(), 2);
+    // The footer line, in the band along the bottom edge where Logic does not
+    // reliably deliver a click (Layout::tabBarSafeBottom): a place nothing can
+    // be operated in is a place for text that is only read.
+    g.setColour (theme.label);
+    g.setFont (Theme::labelFontAt (9.0f));
+    g.drawText (utf8 ("FX ANALYZER " JucePlugin_VersionString
+                      "   \xc2\xb7   NEVER WRITES TO THE SIGNAL   \xc2\xb7   INPUT GAIN SCALES ONLY WHAT IS MEASURED"
+                      "   \xc2\xb7   F FREEZES, R RESETS THE METERS"),
+                footerArea, juce::Justification::centredLeft, true);
 }
 
 void FXAnalyzerEditor::resized()
@@ -330,6 +333,9 @@ void FXAnalyzerEditor::resized()
 
     tabs.setBounds (area.removeFromBottom (stripHeight));
     tabs.setContentHeight (stripHeight - safeBottom);
+
+    footerArea = tabs.getBounds().removeFromBottom (safeBottom).withTrimmedLeft (13).withTrimmedRight (13)
+                     .withTrimmedBottom (3);
 
 
     for (auto* page : pages)
@@ -359,6 +365,13 @@ void FXAnalyzerEditor::advanceOneFrame()
     const auto loudest = juce::jmax (stereo.getRmsLeftDb(), stereo.getRmsRightDb());
 
     header.setActivity (juce::jlimit (0.0f, 1.0f, (loudest + 60.0f) / 60.0f));
+
+    const auto channel = juce::jlimit (0, FXParams::channelNames.size() - 1,
+                                       plugin.getChoiceParameter (FXParams::channel));
+
+    header.setStatus (juce::String (plugin.getAnalysis().getSampleRate() / 1000.0, 1) + " kHz  "
+                          + utf8 ("\xc2\xb7") + "  " + FXParams::channelNames[channel],
+                      plugin.getBoolParameter (FXParams::freeze));
 }
 
 //==============================================================================
@@ -391,19 +404,7 @@ bool FXAnalyzerEditor::keyPressed (const juce::KeyPress& key)
 void FXAnalyzerEditor::showMenu()
 {
     juce::PopupMenu menu;
-    juce::PopupMenu themeMenu;
 
-    const auto& themes = builtInThemes();
-    const auto currentName = theme.name;
-
-    for (size_t i = 0; i < themes.size(); ++i)
-        themeMenu.addItem ((int) i + 1, themes[i].name, true, themes[i].name == currentName);
-
-    menu.addSubMenu ("Theme", themeMenu);
-    menu.addItem (102, "Edit Colours...");
-    menu.addItem (100, "Import Theme...");
-    menu.addItem (101, "Export Theme...");
-    menu.addSeparator();
     menu.addItem (200, "Reset Meters");
     menu.addItem (201, "Save Diagnostics...");
     menu.addSeparator();
@@ -412,102 +413,9 @@ void FXAnalyzerEditor::showMenu()
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (header.getMenuScreenArea()),
                         [this] (int result)
     {
-        if (result == 0)
-            return;
-
-        if (result == 100)      importTheme();
-        else if (result == 101) exportTheme();
-        else if (result == 102) showColourEditor();
-        else if (result == 200) plugin.getAnalysis().resetMeters();
+        if (result == 200)      plugin.getAnalysis().resetMeters();
         else if (result == 201) saveDiagnostics();
-        else if (result >= 1 && result <= (int) builtInThemes().size())
-            plugin.setTheme (builtInThemes()[(size_t) result - 1]);
     });
-}
-
-namespace
-{
-    /** The window the colour editor lives in.
-
-        A plain DocumentWindow with the editor as its content. The only thing
-        worth reading here is the close path: a window may not delete itself
-        from inside its own callback, so both the title bar's button and the
-        editor's Done ask the plugin editor to do it on the next message, with a
-        SafePointer in case the host tears everything down in between. */
-    class ColourWindow final : public juce::DocumentWindow
-    {
-    public:
-        ColourWindow (FXAnalyzerProcessor& processor, std::function<void()> closeRequested)
-            : DocumentWindow ("FX Analyzer " + juce::String (juce::CharPointer_UTF8 ("\xe2\x80\x94")) + " Colours",
-                              juce::Colours::black, DocumentWindow::closeButton),
-              onCloseRequested (std::move (closeRequested))
-        {
-            setUsingNativeTitleBar (true);
-            setContentOwned (new ColourEditor (processor), false);
-            setResizable (true, false);
-            setResizeLimits (520, 340, 1400, 900);
-
-            // Above the plugin window, which is the whole point: you click into
-            // the panel to see the effect, and this must not disappear behind
-            // it while you do.
-            setAlwaysOnTop (true);
-            centreWithSize (640, 430);
-            setVisible (true);
-        }
-
-        void closeButtonPressed() override
-        {
-            if (onCloseRequested != nullptr)
-                onCloseRequested();
-        }
-
-    private:
-        std::function<void()> onCloseRequested;
-    };
-}
-
-ColourEditor* FXAnalyzerEditor::colourEditorContent() const
-{
-    return colourWindow != nullptr ? dynamic_cast<ColourEditor*> (colourWindow->getContentComponent())
-                                   : nullptr;
-}
-
-void FXAnalyzerEditor::showColourEditor()
-{
-    if (colourWindow != nullptr)
-    {
-        colourWindow->toFront (true);
-        return;
-    }
-
-    juce::Component::SafePointer<FXAnalyzerEditor> safe (this);
-
-    const auto requestClose = [safe]
-    {
-        // Never synchronously: this is called from a click inside the window
-        // that is about to be destroyed.
-        juce::MessageManager::callAsync ([safe]
-        {
-            if (auto* editor = safe.getComponent())
-                editor->closeColourEditor();
-        });
-    };
-
-    colourWindow = std::make_unique<ColourWindow> (plugin, requestClose);
-
-    if (auto* content = colourEditorContent())
-    {
-        content->onClose = requestClose;
-        content->setTheme (theme);
-    }
-}
-
-void FXAnalyzerEditor::closeColourEditor()
-{
-    // Destroyed rather than hidden. It holds the theme the panel had when it
-    // opened, for Revert, and a hidden editor reopened an hour later would
-    // offer to revert to a theme from an hour ago.
-    colourWindow.reset();
 }
 
 void FXAnalyzerEditor::showPresetMenu()
@@ -524,10 +432,7 @@ void FXAnalyzerEditor::showPresetMenu()
     {
         if (result == 1)
         {
-            // "Default" restores the measurement settings and leaves the theme
-            // alone. A colour scheme is a preference, not part of a preset, and
-            // resetting somebody's chosen colours because they asked for the
-            // default channel setting would be a surprise.
+            // "Default" restores the measurement settings.
             plugin.setFloatParameter (FXParams::inputGainDb, 0.0f);
             plugin.setChoiceParameter (FXParams::channel, (int) FXParams::Channel::leftPlusRight);
             plugin.setChoiceParameter (FXParams::reactivity, (int) FXParams::Reactivity::medium);
@@ -577,7 +482,6 @@ void FXAnalyzerEditor::showPresetMenu()
                     if (file.loadFileAsData (block))
                     {
                         plugin.setStateInformation (block.getData(), (int) block.getSize());
-                        applyTheme();
 
                         if (auto* page = currentPage())
                             page->pageShown();
@@ -589,44 +493,6 @@ void FXAnalyzerEditor::showPresetMenu()
 }
 
 //==============================================================================
-void FXAnalyzerEditor::importTheme()
-{
-    chooser = std::make_unique<juce::FileChooser> (
-        "Import a theme",
-        juce::File::getSpecialLocation (juce::File::userDocumentsDirectory),
-        "*.json");
-
-    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                          [this] (const juce::FileChooser& fc)
-    {
-        const auto file = fc.getResult();
-
-        if (file == juce::File())
-            return;
-
-        Theme imported;
-
-        if (Theme::fromJson (file.loadFileAsString(), imported))
-        {
-            plugin.setTheme (imported);
-            applyTheme();
-        }
-        else
-        {
-            // Refused rather than half-applied - see Theme::fromJson. Saying so
-            // matters: a theme that silently did not load looks exactly like a
-            // theme that loaded and happened to be the same colours.
-            juce::NativeMessageBox::showAsync (
-                juce::MessageBoxOptions()
-                    .withIconType (juce::MessageBoxIconType::WarningIcon)
-                    .withTitle ("Import Theme")
-                    .withMessage (file.getFileName() + " is not an FX Analyzer theme.")
-                    .withButton ("OK"),
-                nullptr);
-        }
-    });
-}
-
 void FXAnalyzerEditor::saveDiagnostics()
 {
     chooser = std::make_unique<juce::FileChooser> (
@@ -661,28 +527,5 @@ void FXAnalyzerEditor::saveDiagnostics()
         // to the first and leave a file that reads as one impossible session.
         file.deleteFile();
         file.replaceWithText (lines.joinIntoString ("\n") + "\n");
-    });
-}
-
-void FXAnalyzerEditor::exportTheme()
-{
-    chooser = std::make_unique<juce::FileChooser> (
-        "Export the current theme",
-        juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
-            .getChildFile (theme.name + ".json"),
-        "*.json");
-
-    chooser->launchAsync (juce::FileBrowserComponent::saveMode
-                              | juce::FileBrowserComponent::warnAboutOverwriting,
-                          [this] (const juce::FileChooser& fc)
-    {
-        const auto file = fc.getResult();
-
-        if (file == juce::File())
-            return;
-
-        // See the preset save above: this has to truncate, and only
-        // replaceWithText does.
-        file.replaceWithText (theme.toJson());
     });
 }

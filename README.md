@@ -53,11 +53,13 @@ Scripts/install.sh              # install, flush the caches, run auval
 
 `build.sh` builds, runs 151 measurement assertions, checks that a saved session
 comes back **and that an open panel shows it**, survives a host re-preparing
-under load, then renders twelve shots
+under load, then renders fourteen shots
 to `build/shots/*.png` — the six pages plus the spectrum on its linear scale,
-unsmoothed and at a narrow range, and the colour editor: surfaces and states no
-default page shot shows, two of which have had a bug only a picture would have
-caught. It fails loudly at any of those three.
+unsmoothed, at a narrow range, at one resolution, zoomed to the bass (twice) and
+as 63 bars, and the scope at its longest time base: surfaces and states no
+default page shot shows, several of which have had a bug only a picture would
+have caught. `EditorShot build/shots --demo --scale 0.75` (or `2`) renders the
+same set at the two ends of the window's size range. It fails loudly at any of those three.
 
 ## Why there is no AUv3
 
@@ -114,7 +116,7 @@ in Options › Audio Settings and it stays muted.
 
 | Page | What it shows |
 | --- | --- |
-| **Spectrum** | The graph alone, full width: FFT curve, 31 or 63 bars (third- or sixth-octave), or sonogram, peak hold, and three buttons over it — cursor readout (names the note under the pointer), bass zoom, freeze. Every setting for it is on the Settings page. |
+| **Spectrum** | The graph alone, full width: FFT curve, 31 or 63 bars (third- or sixth-octave), or sonogram, peak hold, and buttons over it: **L+R / MID / SIDE** choose what is measured (the Channel parameter, for every page — L and R alone are in Settings), then cursor readout (names the note under the pointer), bass zoom, freeze. Every other setting for it is on the Settings page. |
 | **Scope** | Two traces overlaid, triggered on a rising or falling edge. 1 to 200 ms, auto gain that states its own multiplier. |
 | **Loudness** | Momentary, short-term and integrated LUFS to BS.1770-4, loudness range to EBU Tech 3342, true peak, and the distance to a chosen target. The integrated value is dimmed until it rests on five seconds of gated material. |
 | **Stereo** | Goniometer rotated so mono is vertical, correlation, balance as a side rather than a signed number, width as side-over-mid energy in dB. |
@@ -124,8 +126,8 @@ in Options › Audio Settings and it stays muted.
 ### The Settings page
 
 Rebuilt on 2026-09-24 so that a musical setting can be found by ear: step a
-value, watch the curve answer. Two rows of compact steppers, grouped by the
-question each one answers, under a **live preview** that is the Spectrum page
+value, watch the curve answer. Two rows of sections, grouped by the question
+each one answers, under a **live preview** that is the Spectrum page
 itself, embedded — not a simplified copy — so what the preview shows is what the
 Spectrum tab shows afterwards, tier seams included.
 
@@ -133,10 +135,15 @@ Spectrum tab shows afterwards, tier seams included.
 | --- | --- |
 | **Resolution** | Mode (Multi / Single) · FFT Size · Bands (Off … 1/1 oct) |
 | **Range** | Top · Range |
-| **Display** | View (2D / Bars 31 / Bars 63 / Sonogram) · Scale (Log / Lin) · Theme |
+| **Display** | View (2D / Bars 31 / Bars 63 / Sonogram) · Scale (Log / Lin) |
 | **Smoothing** | Reactivity · Attack · Release |
-| **Tilt** | Slope (0–6 dB/oct, 0.5 steps, alt-click resets) · Pivot (100 Hz … 5 kHz) |
-| **Input** | Channel · DC Block · Input Gain |
+| **Tilt** | Slope (a knob: 0–6 dB/oct in 0.5 steps, double-click resets) · Pivot (100 Hz … 5 kHz) |
+| **Input** | Channel · DC Block · Input Gain (a knob, see below) |
+
+Every choice from a list is a flat button showing its value, with its name above
+it: click the upper half to step up, the lower half to step down (a small mark
+on the button shows which), or use the wheel. The two settings that are
+continuous are knobs.
 
 Two rows of eight, grouped 3-2-3 in both rows so the group edges line up.
 
@@ -357,7 +364,6 @@ The plugin ships set to the configuration arrived at in use, kept as
 
 | | |
 | --- | --- |
-| Theme | **Paper** |
 | Reactivity | Very Slow |
 | Spectrum | 4096 / 16384 / 65536, 1/3 oct, Multi, bass zoom off |
 | dB axis | −6 dB over 80 dB |
@@ -373,7 +379,7 @@ second time base there is no waveform to lock onto.
 
 ### The bass zoom
 
-**B**, between the magnifier and the freeze button, puts the frequency axis on
+**BASS**, between CURSOR and FREEZE, puts the frequency axis on
 the bass band: 10 … 320 Hz logarithmic, or 0 … 320 Hz on the linear scale. A
 logarithmic axis cannot show 0 Hz, and nothing is lost by starting at 10 — the
 DC blocker corners at 5 Hz, so everything below has already left the signal.
@@ -474,45 +480,27 @@ multi-resolution need smoothing at all.
 If you want third-octave smoothing to mean something at 40 Hz, the window has to
 be long enough to make the band: 32768 and up.
 
-### Colours
+### The look
 
-**Seven colours, three themes** — since 2026-09-24, down from fifteen and six.
+Since 0.2 there is **one fixed design**, the look of the plugin's siblings
+Kitbox and Rackbox: a warm light-grey body, darker recessed sections for groups
+of controls, flat buttons that light up orange, and near-black displays with
+orange type for every graph and every reading — the header's page display, the
+spectrum and scope with their axis labels inside, the loudness bars and numbers,
+the goniometer and the pitch readout. The selected tab is the orange button in
+the row along the bottom.
 
-The fifteen were never fifteen decisions. Background, panel and header were one
-surface at three alphas; grid and minor grid one line at two strengths; the curve
-fill, dim text and disabled arrow were a colour with its alpha turned down; and
-`led` was drawn by nothing. So a theme now stores only what carries a meaning of
-its own, and derives the rest:
+The three user themes (Paper, Slate, Graphite), the colour editor and theme
+import/export were removed with it. A session or a `.fxapreset` saved before
+still carries a `themeName` and a `<Theme>` node; nothing reads them, and
+everything else in it restores (asserted in `EditorShot --state`).
 
-| Stored | Derived from it |
-| --- | --- |
-| `background` | panel, header, graph beds |
-| `grid` | the panel frame; minor gridlines and meter tracks at 60 % |
-| `curve` | the fill under it, at 45 % |
-| `curveAlt` | — |
-| `warning` | — |
-| `text` | dim text (units, captions) at 62 % |
-| `accent` | disabled arrows and buttons at 40 % |
+The rule the themes needed is kept, because it is also what keeps one design
+consistent: every colour lives in `Theme` (`Source/Theme.h`), handed to every
+paint method, and no component names one of its own. The values are Rackbox's
+palette unchanged, so the three plugins look like one family in a host.
 
-Derived colours are functions (`Theme::gridMinor()` …), not stored fields, so
-they cannot drift from their base. The stored names are the old names: a theme
-exported before the change, or a session saved with one, still loads — its extra
-keys are ignored (asserted in `EditorShot --state`).
-
-The themes are **Paper** (default — light, for screenshots and bright rooms),
-**Slate** (the blue-grey family of the customised Yutani it replaces, tidied) and
-**Graphite** (near-black with amber data, for long sessions). Each
-writes out all seven colours rather than inheriting any from the struct, and each
-clears the tab strip's contrast floors in `--hitmap`. Yutani, Onyx, Green Slate,
-Ice, Amber and the old Paper are gone; a session that names one of them still
-carries its own colours in its theme node.
-
-Every colour is editable: **Menu › Edit Colours…** opens a **separate,
-always-on-top window** with a grid of swatches, one per colour in the theme,
-each with its hex value and a note on what it is for and what is derived from
-it. Clicking one opens a picker that applies
-**live** — you are choosing the curve colour while looking at the curve, which
-is the only way to judge it.
+### Diagnostics
 
 **Menu › Save Diagnostics…** writes out what the panel has most recently been
 asked to do — the last sixty-four clicks and page changes, each with the
@@ -521,27 +509,6 @@ all the time rather than behind a switch, because the fault it exists for is
 occasional and by the time anybody thinks to turn logging on the interesting
 moment has passed. A click a host swallows before it reaches the view appears
 there as nothing at all, which is itself the answer.
-
-It was a panel laid over the current page at first, which put it squarely on top
-of the thing whose colours were being chosen. A window of its own is the point:
-the panel stays visible and repaints under every drag of the picker. It is
-destroyed with the plugin editor without exception — a window outliving its
-editor holds a reference to a dead processor.
-*Revert* restores the theme as it was when the editor opened; *Done* closes it.
-
-**Right-click a swatch to copy or paste a colour.** It travels through the system
-clipboard as `#AARRGGBB`, so it carries between swatches, between themes and to
-and from other programs; `#RRGGBB` pastes as opaque. A clipboard that does not
-hold a colour leaves Paste disabled — `juce::Colour::fromString` would read any
-text as *some* colour, usually transparent black.
-
-Editing a shipped theme renames it to **Custom**, so a session cannot claim to
-be using "Graphite" while showing something else.
-
-The editor has no list of its own. It enumerates `Theme::numColours()`, so a
-colour added to the struct in `Theme.h` and to the table in `Theme.cpp` appears
-in it without this file being touched — that is the return on the rule that no
-paint method may name a colour of its own.
 
 ### Saving
 
@@ -574,23 +541,20 @@ with it, three out of three clean.
 
 ### Input Gain
 
-A stepper like the others, not a knob — but in a **numeric** mode rather than a
-list of choices. It is the only one of these controls that is an automatable
-parameter with 0.1 dB resolution, and quantising it into a `StringArray` would
-snap every automation curve to the list's steps: a regression you would only
-meet in a host, long after the change that caused it looked like a
-simplification. The step is how far a click moves (1 dB, a tenth with shift,
-alt-click back to unity — not double click, see below), never a grid the value is forced onto. Asserted in
-`EditorShot --state`: −7.3 dB stays −7.3 dB.
+A **knob** since 0.2, bipolar from unity, continuous to 0.1 dB. It is the only
+one of these controls that is an automatable parameter with that resolution, and
+quantising it would snap every automation curve to the steps: a regression you
+would only meet in a host, long after the change that caused it looked like a
+simplification. A drag, a wheel step or a double-click (back to 0 dB) each reach
+the host as one gesture.
 
-Reset is on **alt-click**, not double click. It was on double click at first,
-carried over from the ring knob this replaced — harmless on a knob, because
-nobody clicks a knob twice in a row, and wrong on a stepper, where repeated
-clicking *is* the interaction. JUCE sends `mouseDoubleClick` **in addition to**
-the second `mouseDown`, so raising the gain at any normal speed reset it to
-zero. Reported as "Input sometimes jumps back to 0"; it was not sometimes. Both
-halves are now asserted: two quick clicks step twice, and alt-click still
-resets.
+It was a numeric stepper before, and the history is worth one line: its reset
+had to be on alt-click, because on a stepper repeated clicking *is* the
+interaction and JUCE sends `mouseDoubleClick` in addition to the second
+`mouseDown` — a double-click reset zeroed the gain at any normal clicking speed.
+On a knob nobody clicks twice in a row, so double-click is right again. The
+numeric stepper still exists and `EditorShot --state` still holds it to its
+contract (an off-step value is not snapped; two quick clicks step twice).
 
 ### The dB axis
 
@@ -644,12 +608,8 @@ Keyboard: **1**–**6** select a page, **F** freezes, **R** resets the meters.
 ## Colours
 
 Every colour the panel uses lives in one `Theme` struct that is handed to every
-`paint` method. No component names a colour of its own — that rule is what makes
-the colours editable later rather than rewritable later. Three themes ship
-(Paper, Slate, Graphite); Settings › Theme or the hamburger menu switches between
-them, and the menu imports or exports a theme as JSON and opens the colour
-editor. The chosen theme is saved with the session. See *Colours* above for the
-seven colours and what is derived from them.
+`paint` method, and no component names a colour of its own. Since 0.2 it holds
+one fixed palette (Rackbox's); see *The look* above.
 
 ## Verification
 
@@ -671,30 +631,16 @@ end belonged to no tab at all. The first and last tab now run out to the edges,
 and the map is a PNG as well as a count, because an overlay added later is a
 shape.
 
-It also measures whether the strip *shows* which tab is selected, which is the
-fault the geometry did not explain. Clicks on the tab strip were reported as not
-working; the diagnostic log showed every click arriving and every first click
-changing the page. What was missing was the answer: with the label colour and
-the accent colour both near-white, the selected tab measured a WCAG contrast of
-**1.00** against the others in Onyx and 1.05 in Yutani — the same brightness, to
-two decimal places. Unselected tabs are now drawn at 60 % of the accent's alpha
-and the selected one carries a bar beneath it in the text colour, which is the
-one colour a theme cannot make illegible without making the panel illegible.
-
-Dimming alone was not enough, and the second round is the more interesting one.
-The *hovered* tab was still drawn in the text colour, so the tab under the
-pointer looked exactly like the selected one — 1.14 apart in Yutani — and the
-pointer is always on the tab you are about to click. Nothing appeared to happen
-when you clicked it. Retuning the alphas cannot fix that: in a monochrome theme
-the accent and the text are the same colour, so at the point where hover is
-visible against the unselected tabs it is indistinguishable from selected. The
-measurements are in `TabBar.h`.
-
-So the state is a **shape**. Hover draws the same bar, faint; selecting makes it
-solid. Presence and strength of a mark rather than a shade of a colour, which is
-the one thing a palette cannot take away. Every built-in theme is held to six
-floors, including WCAG's 3:1 for the mark and 2.2 between the solid mark and the
-faint one.
+It also measures whether the strip *shows* which tab is selected, which was once
+the fault the geometry did not explain: with user themes, the selected tab
+measured a WCAG contrast of **1.00** against the others in one of them, and
+clicks were reported as not working when the page had changed every time. With
+one design the selection is a fill again — the orange button among grey ones -
+and orange and that grey are close in *luminance* (about 1.2 : 1) while being
+nothing alike in colour. A luminance ratio would call that invisible, so the
+fills are held to a colour distance instead (CIE76 ΔE in Lab: 70 between the
+selected and the other tabs, 5.5 for hover), and the type on each fill to WCAG's
+4.5 : 1 for text.
 
 ### Clicks the host does not deliver
 

@@ -12,7 +12,7 @@
 //  design decision in this file worth arguing about. Only the five things that
 //  change what is *measured* are parameters: input gain, channel, reactivity,
 //  DC block, freeze. Everything else - which page is open, log or linear, the
-//  scope time base, the theme - is view state living in the same ValueTree but
+//  scope time base - is view state living in the same ValueTree but
 //  outside the parameter set. The alternative, making them all parameters, was
 //  rejected because a host would then offer "Spectrum Mode" in an automation
 //  lane and write a page change into every preset morph. Nobody automates which
@@ -364,18 +364,17 @@ namespace FXParams
     inline constexpr const char* propStereoMode    = "stereoMode";
     inline constexpr const char* propStereoZoomDb  = "stereoZoomDb";
     inline constexpr const char* propPitchRefHz    = "pitchRefHz";
-    inline constexpr const char* propThemeName     = "themeName";
+
+    // "themeName" and a <Theme> child node were view state until 0.2, when the
+    // user themes went and the design became fixed. Sessions and presets saved
+    // before still carry them; nothing reads them, and replaceState keeps them
+    // as inert data rather than failing on them.
 
     /** Set once the standalone build has lifted JUCE's default input mute, so
         that a user who deliberately mutes the input again does not have it
         silently unmuted for them on the next launch. It means "we have had our
         say about this", not "the input is on". */
     inline constexpr const char* propStandaloneInputChosen = "standaloneInputChosen";
-
-    /** The custom theme is a child node rather than a property, because it is a
-        dozen colours and flattening them into one string is how a theme becomes
-        unreadable in a session file. */
-    inline constexpr const char* themeNodeType     = "Theme";
 
     // ---- Pages -------------------------------------------------------------
 

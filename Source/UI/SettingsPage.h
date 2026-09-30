@@ -55,6 +55,7 @@
 
 #include "PageBase.h"
 #include "SpectrumPage.h"
+#include "KnobControl.h"
 #include "StepperControl.h"
 
 class SettingsPage : public PageBase
@@ -67,10 +68,6 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
-
-    /** The editor rebuilds itself when this fires, because a theme change
-        touches every open component and the page cannot reach them. */
-    std::function<void()> onThemeSelected;
 
 protected:
     void themeChanged() override;
@@ -89,8 +86,8 @@ private:
     struct Group
     {
         juce::String title;
-        std::vector<StepperControl*> controls;
-        juce::Rectangle<int> titleArea;
+        std::vector<juce::Component*> controls;
+        juce::Rectangle<int> titleArea, sectionArea;
     };
 
     std::vector<StepperControl*> allSteppers();
@@ -99,10 +96,12 @@ private:
 
     StepperControl resolutionStepper, fftSizeStepper, bandsStepper;
     StepperControl topStepper, rangeStepper;
-    StepperControl slopeStepper, pivotStepper;
+    KnobControl slopeKnob { "Slope", false };
+    StepperControl pivotStepper;
     StepperControl reactivityStepper, attackStepper, releaseStepper;
-    StepperControl channelStepper, dcBlockStepper, inputGainStepper;
-    StepperControl viewStepper, scaleStepper, themeStepper;
+    StepperControl channelStepper, dcBlockStepper;
+    KnobControl inputGainKnob { "Input Gain", true };
+    StepperControl viewStepper, scaleStepper;
 
     std::vector<Group> topRow, bottomRow;
 

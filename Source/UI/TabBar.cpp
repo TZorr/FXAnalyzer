@@ -49,32 +49,16 @@ juce::Rectangle<float> TabBar::areaForTab (int index) const
     if (tabs.isEmpty() || ! juce::isPositiveAndBelow (index, tabs.size()))
         return {};
 
-    // Width follows the text, with the leftover space shared out equally. Six
-    // equal columns would put SPECTRUM and PITCH in boxes of the same width,
-    // which leaves the short names floating in space and the long ones touching
-    // their neighbours - the mockup's spacing is text-driven and it is right.
-    const auto font = theme().tabFont();
+    // Equal widths, as on Rackbox's selector rows. The drawn row is the content
+    // height less a few points above and below, and the panel's 13 point margin
+    // either side, so the row lines up with the displays above it.
+    const auto drawnHeight = (float) (contentHeight > 0 ? juce::jmin (contentHeight, getHeight()) : getHeight());
+    const auto row = juce::Rectangle<float> (13.0f, 0.0f, (float) getWidth() - 26.0f, drawnHeight)
+                         .withSizeKeepingCentre ((float) getWidth() - 26.0f, juce::jmin (24.0f, drawnHeight - 6.0f));
 
-    float totalText = 0.0f;
-    std::vector<float> widths ((size_t) tabs.size());
+    const auto width = (row.getWidth() - gap * (float) (tabs.size() - 1)) / (float) tabs.size();
 
-    for (int i = 0; i < tabs.size(); ++i)
-    {
-        widths[(size_t) i] = juce::GlyphArrangement::getStringWidth (font, tabs[i]);
-        totalText += widths[(size_t) i];
-    }
-
-    const auto padding = juce::jmax (8.0f, ((float) getWidth() - 24.0f - totalText) / (float) tabs.size());
-
-    float x = 12.0f;
-
-    for (int i = 0; i < index; ++i)
-        x += widths[(size_t) i] + padding;
-
-    const auto drawnHeight = contentHeight > 0 ? juce::jmin (contentHeight, getHeight())
-                                               : getHeight();
-
-    return { x, 0.0f, widths[(size_t) index] + padding, (float) drawnHeight };
+    return { row.getX() + (float) index * (width + gap), row.getY(), width, row.getHeight() };
 }
 
 juce::Rectangle<float> TabBar::hitAreaForTab (int index) const
@@ -86,8 +70,12 @@ juce::Rectangle<float> TabBar::hitAreaForTab (int index) const
 
     // Down to the last pixel, whatever the labels do. The dead space below them
     // exists because the host may not deliver a click there - not because a
-    // click there should be ignored if it arrives.
+    // click there should be ignored if it arrives. And up to the top, and half
+    // the gap either side: the gaps between buttons are drawing, not a place
+    // where a click should fall through to nothing.
+    area.setTop (0.0f);
     area.setBottom ((float) getHeight());
+    area = area.expanded (gap * 0.5f, 0.0f);
 
     if (index == 0)
         area.setLeft (0.0f);
@@ -100,46 +88,23 @@ juce::Rectangle<float> TabBar::hitAreaForTab (int index) const
 
 void TabBar::paint (juce::Graphics& g)
 {
+    // No background: the strip sits on the panel body, and the band below the
+    // buttons is where the editor writes its footer line.
     const auto& t = theme();
 
-    g.setColour (t.background);
-    g.fillRect (getLocalBounds());
-
-    const auto font = t.tabFont();
-    g.setFont (font);
+    g.setFont (t.tabFont());
 
     for (int i = 0; i < tabs.size(); ++i)
     {
         const auto area = areaForTab (i);
         const auto active = i == selectedIndex;
-
         const auto hovered = ! active && i == hoverIndex;
 
-        g.setColour (active ? t.text
-                            : t.accent.withMultipliedAlpha (hovered ? hoverAlpha : inactiveAlpha));
+        g.setColour (active ? t.accent : (hovered ? t.buttonHover : t.button));
+        g.fillRoundedRectangle (area, 5.0f);
 
+        g.setColour (active ? t.onAccent : t.text);
         g.drawText (tabs[i], area, juce::Justification::centred, false);
-
-        if (! active && ! hovered)
-            continue;
-
-        // The bar, as wide as the label rather than as wide as the box - the
-        // boxes share out the leftover space between them and are not the shape
-        // of anything on screen.
-        //
-        // Solid under the selected tab, faint under the one the pointer is on.
-        // Both states then say the same thing in the same place and differ only
-        // in how firmly they say it, which is a distinction that survives any
-        // palette. Brightness of the label alone did not: see the note at the
-        // top of the header.
-        const auto textWidth = juce::GlyphArrangement::getStringWidth (font, tabs[i]);
-
-        const auto thickness = juce::jmax (2.0f, (float) getHeight() / 14.0f);
-        const auto gap       = juce::jmax (4.0f, (float) getHeight() / 10.0f);
-
-        g.setColour (active ? t.text : t.text.withMultipliedAlpha (hoverMarkAlpha));
-        g.fillRect (juce::Rectangle<float> (textWidth, thickness)
-                        .withCentre ({ area.getCentreX(), area.getBottom() - gap - thickness * 0.5f }));
     }
 }
 

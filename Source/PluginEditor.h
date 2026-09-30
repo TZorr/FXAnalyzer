@@ -27,7 +27,6 @@
 
 #include "PluginProcessor.h"
 
-#include "UI/ColourEditor.h"
 #include "UI/HeaderBar.h"
 #include "UI/LoudnessPage.h"
 #include "UI/PitchPage.h"
@@ -86,8 +85,8 @@ public:
         matters. */
     juce::StringArray getDiagnostics() const;
 
-    /** The theme the panel is currently painted in. For the hit map, which has
-        to measure the label with the same font the strip draws it in. */
+    /** The panel's palette and type. For the hit map, which has to measure
+        the label with the same font the strip draws it in. */
     const Theme& getPanelTheme() const { return theme; }
 
     /** The tab strip, for the hit map. A click is not delivered to the
@@ -110,12 +109,6 @@ public:
         out cheaper than 30. */
     void advanceOneFrame();
 
-    /** Takes the colour editor back off the page. Public alongside
-        showColourEditor for EditorShot: an overlay that outlives its shot
-        covers whatever is rendered next, which is how the single-resolution
-        comparison came out as a picture of the colour editor. */
-    void closeColourEditor();
-
 private:
     void timerCallback() override;
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
@@ -123,10 +116,7 @@ private:
     void applyTheme();
     void unmuteStandaloneInput();
     void showMenu();
-    void showColourEditor();
     void showPresetMenu();
-    void importTheme();
-    void exportTheme();
     void saveDiagnostics();
 
     PageBase* currentPage() const;
@@ -197,23 +187,12 @@ private:
 
     std::array<PageBase*, FXParams::numPages> pages;
 
-    Theme theme;
+    const Theme theme;
+
+    /** The footer line, in the tab strip's click-dead band at the bottom. */
+    juce::Rectangle<int> footerArea;
 
     std::unique_ptr<juce::FileChooser> chooser;
-
-    /** A window of its own rather than a panel laid over the page.
-
-        It used to cover the current page, which put it squarely on top of the
-        thing whose colours were being chosen - you could not see the curve
-        while picking the curve's colour. As a separate always-on-top window the
-        panel stays visible and repaints live under every drag of the picker.
-
-        Destroyed in this class's destructor without exception: a window that
-        outlives its plugin editor holds a reference to a dead processor, and a
-        host may tear an editor down at any moment. */
-    std::unique_ptr<juce::DocumentWindow> colourWindow;
-
-    ColourEditor* colourEditorContent() const;
 
     juce::TooltipWindow tooltips { this, 700 };
 

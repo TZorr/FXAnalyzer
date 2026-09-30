@@ -40,6 +40,7 @@ protected:
 private:
     void syncFromState();
     void applyTimeBase();
+    juce::Rectangle<float> displayArea() const;
     juce::Rectangle<float> plotArea() const;
     void paintTrace (juce::Graphics&, const std::vector<float>&, int count,
                      juce::Colour, float gain, float thickness) const;

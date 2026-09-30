@@ -284,27 +284,6 @@ void FXAnalyzerProcessor::setViewProperty (const juce::Identifier& id, const juc
     parameters.state.setProperty (id, value, nullptr);
 }
 
-Theme FXAnalyzerProcessor::getTheme() const
-{
-    const auto node = parameters.state.getChildWithName (FXParams::themeNodeType);
-
-    if (node.isValid())
-        return Theme::fromValueTree (node);
-
-    return themeByName (parameters.state.getProperty (FXParams::propThemeName, builtInThemes().front().name).toString());
-}
-
-void FXAnalyzerProcessor::setTheme (const Theme& theme)
-{
-    auto node = theme.toValueTree();
-
-    parameters.state.removeChild (parameters.state.getChildWithName (FXParams::themeNodeType), nullptr);
-    parameters.state.appendChild (node, nullptr);
-    parameters.state.setProperty (FXParams::propThemeName, theme.name, nullptr);
-
-    sendChangeMessage();
-}
-
 //==============================================================================
 void FXAnalyzerProcessor::getStateInformation (juce::MemoryBlock& destination)
 {

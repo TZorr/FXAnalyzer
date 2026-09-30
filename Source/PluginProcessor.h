@@ -30,16 +30,16 @@
 
 #include "AnalysisHub.h"
 #include "ParameterIds.h"
-#include "Theme.h"
 
 /*  A ChangeBroadcaster as well as a processor, and that is a bug fix rather
-    than a flourish. The theme change used to be a std::function the editor
-    assigned in its constructor and cleared in its destructor - and the host
-    calls setStateInformation from whatever thread it likes, so it could be
-    reading and calling that function object at the moment the message thread
-    was assigning nullptr over it. Torn std::function, crash, and the trigger is
-    a host restoring state while an editor is going away: exactly what happens
-    when a plugin is dragged to another slot.
+    than a flourish. The theme change (there was one then) used to be a
+    std::function the editor assigned in its constructor and cleared in its
+    destructor - and the host calls setStateInformation from whatever thread
+    it likes, so it could be reading and calling that function object at the
+    moment the message thread was assigning nullptr over it. Torn
+    std::function, crash, and the trigger is a host restoring state while an
+    editor is going away: exactly what happens when a plugin is dragged to
+    another slot.
 
     ChangeBroadcaster is built for this. sendChangeMessage() is safe from any
     thread, delivery always lands on the message thread, and a listener that is
@@ -123,11 +123,6 @@ public:
 
     float getSpectrumTiltPivotHz() const;
 
-    Theme getTheme() const;
-    void  setTheme (const Theme&);
-
-    /* The theme change is broadcast, not called back: see the note on the
-       class. Listen with addChangeListener. */
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout makeParameterLayout();

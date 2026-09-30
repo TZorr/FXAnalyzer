@@ -4,6 +4,7 @@
 //
 
 #include "PitchPage.h"
+#include "GraphAxes.h"
 #include "../PluginProcessor.h"
 
 #include <cmath>
@@ -71,8 +72,8 @@ void PitchPage::refresh()
 //==============================================================================
 void PitchPage::resized()
 {
-    auto area = getLocalBounds().reduced (10, 10);
-    auto sideColumn = area.removeFromRight (Layout::sideColumnWidth).reduced (6, 0);
+    auto area = getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY);
+    auto sideColumn = area.removeFromRight (Layout::sideColumnWidth).withTrimmedLeft (10);
 
     layOutStepperColumn (sideColumn.removeFromTop (sideColumn.getHeight() / 3), { &referenceStepper });
 }
@@ -84,9 +85,12 @@ void PitchPage::paint (juce::Graphics& g)
     g.setColour (t.background);
     g.fillRect (getLocalBounds());
 
-    auto area = getLocalBounds().reduced (10, 10);
+    auto area = getLocalBounds().reduced (Layout::pageMarginX, Layout::pageMarginY);
     area.removeFromRight (Layout::sideColumnWidth);
-    area = area.reduced (18, 10);
+
+    GraphAxes::paintDisplay (g, t, area.toFloat());
+
+    area = area.reduced (40, 20);
 
     const auto result = plugin.getAnalysis().getPitch();
     const auto reference = plugin.getAnalysis().getPitchReferenceHz();
@@ -96,8 +100,8 @@ void PitchPage::paint (juce::Graphics& g)
     // ---- The note -------------------------------------------------------
     auto noteArea = area.removeFromTop (juce::roundToInt ((float) area.getHeight() * 0.46f)).toFloat();
 
-    g.setColour (haveNote ? t.text : t.dimText());
-    g.setFont (t.font (juce::jmin (110.0f, noteArea.getHeight() * 0.86f), juce::Font::plain));
+    g.setColour (haveNote ? t.bedText : t.bedDim);
+    g.setFont (Theme::numberFont (juce::jmin (104.0f, noteArea.getHeight() * 0.86f), true));
     g.drawText (haveNote ? note.name + juce::String (note.octave)
                          : juce::String (juce::CharPointer_UTF8 ("\xe2\x80\x93")),
                 noteArea, juce::Justification::centred, false);
@@ -116,12 +120,12 @@ void PitchPage::paint (juce::Graphics& g)
         auto bounds = footer.withWidth (columnWidth).translated (columnWidth * (float) index, 0.0f);
         auto captionArea = bounds.removeFromTop (16.0f);
 
-        g.setColour (t.accent);
-        g.setFont (t.labelFont());
+        g.setColour (t.bedDim);
+        g.setFont (t.axisFont().withHeight (10.0f));
         g.drawText (caption, captionArea, juce::Justification::centred, false);
 
         g.setColour (colour);
-        g.setFont (t.numberFont (20.0f));
+        g.setFont (Theme::numberFont (20.0f, true));
         g.drawText (value, bounds, juce::Justification::centred, false);
     };
 
@@ -129,17 +133,17 @@ void PitchPage::paint (juce::Graphics& g)
 
     column (0, "FREQUENCY",
             haveNote ? juce::String (result.frequencyHz, result.frequencyHz < 1000.0f ? 2 : 1) + " Hz" : dash,
-            haveNote ? t.text : t.dimText());
+            haveNote ? t.bedText : t.bedDim);
 
     column (1, "CENTS",
             haveNote ? (note.cents >= 0.0f ? "+" : "") + juce::String (note.cents, 1) : dash,
-            haveNote ? t.text : t.dimText());
+            haveNote ? t.bedText : t.bedDim);
 
     // Confidence is coloured by the same threshold the note display uses, so
     // the two never disagree about whether there is a note.
     column (2, "CONFIDENCE",
             juce::String (juce::roundToInt (result.confidence * 100.0f)) + "%",
-            haveNote ? t.text : t.dimText());
+            haveNote ? t.bedText : t.bedDim);
 }
 
 void PitchPage::paintCentsBar (juce::Graphics& g, juce::Rectangle<float> area, float cents, bool haveNote) const
@@ -148,7 +152,7 @@ void PitchPage::paintCentsBar (juce::Graphics& g, juce::Rectangle<float> area, f
 
     auto bar = area.withSizeKeepingCentre (area.getWidth(), 26.0f);
 
-    g.setColour (t.gridMinor());
+    g.setColour (t.grid);
     g.fillRoundedRectangle (bar, 4.0f);
 
     // Tick marks every ten cents, with the centre band drawn as a block rather
@@ -157,16 +161,16 @@ void PitchPage::paintCentsBar (juce::Graphics& g, juce::Rectangle<float> area, f
     const auto centreX = bar.getCentreX();
     const auto pixelsPerCent = bar.getWidth() / 100.0f;
 
-    g.setColour (t.curve.withAlpha (0.18f));
+    g.setColour (t.bedButton);
     g.fillRect (centreX - 5.0f * pixelsPerCent, bar.getY(), 10.0f * pixelsPerCent, bar.getHeight());
 
-    g.setColour (t.gridMinor());
+    g.setColour (t.bedDim.withAlpha (0.6f));
 
     for (int tick = -40; tick <= 40; tick += 10)
         if (tick != 0)
             g.fillRect (centreX + (float) tick * pixelsPerCent, bar.getY() + 6.0f, 1.0f, bar.getHeight() - 12.0f);
 
-    g.setColour (t.grid.brighter (0.3f));
+    g.setColour (t.bedDim);
     g.fillRect (centreX - 0.5f, bar.getY(), 1.0f, bar.getHeight());
 
     if (haveNote)
@@ -181,10 +185,7 @@ void PitchPage::paintCentsBar (juce::Graphics& g, juce::Rectangle<float> area, f
         g.fillRoundedRectangle (marker, 2.5f);
     }
 
-    g.setColour (t.grid);
-    g.drawRoundedRectangle (bar, 4.0f, 1.0f);
-
-    g.setColour (t.dimText());
+    g.setColour (t.bedDim);
     g.setFont (t.axisFont());
 
     auto labels = area.removeFromBottom (16.0f);

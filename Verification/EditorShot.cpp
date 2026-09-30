@@ -21,22 +21,24 @@
 //  do its job: the curve, the goniometer cloud and the note name all have to be
 //  in the picture before anything can be said about the spacing around them.
 //
-//  --theme <name> renders in one of the built-in themes instead of the default.
-//  It is not a convenience: it is the test of the claim Theme.h makes. If any
-//  component still names a colour of its own, it stays green in the amber
-//  render and the picture says so immediately - which no amount of reading the
-//  paint methods reliably does.
+//  There is one design since 0.2 (the Kitbox look), so there is no --theme any
+//  more; the hit map holds that one palette to its contrast floors instead.
 //
-//  Usage:  EditorShot <output-directory> [--demo] [--theme <name>]
+//  --scale <factor> renders at that multiple of the default size (the window is
+//  resizable from 0.75 to 2), with the factor in each file name. The graphs
+//  grow and the controls do not, so the two ends of the range are where a
+//  layout runs out of room or leaves too much of it.
+//
+//  Usage:  EditorShot <output-directory> [--demo] [--scale <factor>]
 //
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "PluginEditor.h"
-#include "UI/ColourEditor.h"
 #include "UI/StepperControl.h"
 #include "PluginProcessor.h"
 
+#include <array>
 #include <bit>
 #include <cmath>
 #include <cstdint>
@@ -49,6 +51,38 @@
 
 namespace
 {
+    /** CIE76 delta E between two opaque colours, in Lab under D65: about 2.3
+        is a just-noticeable difference, 40 and more is a different colour
+        rather than a different shade. Here for the tab strip's check, where the
+        selection is carried by hue and a luminance ratio cannot see it. */
+    float colourDistance (juce::Colour a, juce::Colour b)
+    {
+        const auto toLab = [] (juce::Colour c)
+        {
+            const auto linear = [] (float v)
+            {
+                return v <= 0.04045f ? v / 12.92f : std::pow ((v + 0.055f) / 1.055f, 2.4f);
+            };
+
+            const auto red = linear (c.getFloatRed()), green = linear (c.getFloatGreen()), blue = linear (c.getFloatBlue());
+
+            const auto x = (0.4124f * red + 0.3576f * green + 0.1805f * blue) / 0.95047f;
+            const auto y = (0.2126f * red + 0.7152f * green + 0.0722f * blue);
+            const auto z = (0.0193f * red + 0.1192f * green + 0.9505f * blue) / 1.08883f;
+
+            const auto f = [] (float t)
+            {
+                return t > 0.008856f ? std::cbrt (t) : 7.787f * t + 16.0f / 116.0f;
+            };
+
+            return std::array<float, 3> { 116.0f * f (y) - 16.0f, 500.0f * (f (x) - f (y)), 200.0f * (f (y) - f (z)) };
+        };
+
+        const auto la = toLab (a), lb = toLab (b);
+        return std::sqrt ((la[0] - lb[0]) * (la[0] - lb[0]) + (la[1] - lb[1]) * (la[1] - lb[1])
+                            + (la[2] - lb[2]) * (la[2] - lb[2]));
+    }
+
     /** A signal with something to say on every page: a pitched note with
         harmonics for Pitch and Spectrum, broadband noise so the top of the
         spectrum is not empty, a slow tremolo so Loudness has a range to report,
@@ -105,7 +139,7 @@ int main (int argc, char** argv)
     bool         profile = false;
     bool         resolutionCheck = false;
     bool         hitMap = false;
-    juce::String themeName;
+    float        scale = 1.0f;
 
     for (int argument = 2; argument < argc; ++argument)
     {
@@ -123,8 +157,8 @@ int main (int argc, char** argv)
             resolutionCheck = true;
         else if (option == "--hitmap")
             hitMap = true;
-        else if (option == "--theme" && argument + 1 < argc)
-            themeName = juce::String (argv[++argument]);
+        else if (option == "--scale" && argument + 1 < argc)
+            scale = juce::jlimit (0.75f, 2.0f, (float) juce::String (argv[++argument]).getDoubleValue());
     }
 
     if (! outputDirectory.createDirectory())
@@ -378,57 +412,39 @@ int main (int argc, char** argv)
             }
         }
 
-        // Can you see which tab is selected? In every theme, not just the one
-        // that happened to be open while the strip was designed.
+        // Can you see which tab is selected, and read every label?
         //
-        // This is the check that would have caught the fault the hit map did
-        // not: the geometry was perfect and the strip still told you nothing,
-        // because Onyx and Yutani put the label colour and the accent colour
-        // within a hair of each other. Measured as a WCAG contrast ratio
-        // between the two label colours as they are actually composited - over
-        // the header, over the background - rather than between the theme
-        // entries, which are part transparent and would flatter themselves.
-        for (const auto& candidate : builtInThemes())
+        // With user themes this was a loop over every theme, measuring WCAG
+        // luminance contrast, because one theme had once put the selected and
+        // unselected labels at 1.00. The design is fixed now and the selection
+        // is a fill - an orange button among grey ones - and orange and that
+        // grey are close in luminance (about 1.2:1) while being nothing alike
+        // in colour. A luminance ratio would call that invisible. So the fills
+        // are compared by colour distance, CIE76 delta E in Lab, and the text on
+        // them by WCAG contrast, which is the right measure for type.
         {
-            const auto bed = candidate.background;
+            const Theme t;
 
-            const auto activeLabel   = bed.overlaidWith (candidate.text);
-            const auto inactiveLabel = bed.overlaidWith (candidate.accent
-                                                             .withMultipliedAlpha (TabBar::inactiveAlpha));
+            const auto selectedFill = colourDistance (t.accent, t.button);
+            const auto hoverFill    = colourDistance (t.buttonHover, t.button);
+            const auto hoverApart   = colourDistance (t.accent, t.buttonHover);
+            const auto litText      = Theme::contrastRatio (t.onAccent, t.accent);
+            const auto restText     = Theme::contrastRatio (t.text, t.button);
+            const auto hoverText    = Theme::contrastRatio (t.text, t.buttonHover);
 
-            const auto hoverLabel = bed.overlaidWith (candidate.accent
-                                                          .withMultipliedAlpha (TabBar::hoverAlpha));
-            const auto hoverMark  = bed.overlaidWith (candidate.text
-                                                          .withMultipliedAlpha (TabBar::hoverMarkAlpha));
-
-            const auto selection = Theme::contrastRatio (activeLabel, inactiveLabel);
-            const auto legible   = Theme::contrastRatio (inactiveLabel, bed);
-            const auto marker    = Theme::contrastRatio (activeLabel, bed);
-
-            // Hover has to be visible and must never read as the selection.
-            // Brightness cannot carry both in a monochrome palette - the
-            // measurements are in the TabBar header - so the test asks the
-            // question of the *mark*: the faint bar has to be seen against the
-            // strip, and the solid one has to be clearly stronger than it.
-            const auto hoverVisible = Theme::contrastRatio (hoverLabel, inactiveLabel);
-            const auto markSeen     = Theme::contrastRatio (hoverMark, bed);
-            const auto markApart    = Theme::contrastRatio (activeLabel, hoverMark);
-
-            // 1.7 is not a standard, it is a floor with the measurements behind
-            // it: 1.00 was invisible and every theme now clears 1.79. The 3.0
-            // for the marker is a standard - WCAG's floor for a piece of user
-            // interface that is not text - and it is what ruled out drawing the
-            // bar in the accent colour, which Ice could not clear.
-            const auto ok = selection >= 1.7f && legible >= 1.9f && marker >= 3.0f
-                                && hoverVisible >= 1.2f && markSeen >= 1.2f && markApart >= 2.2f;
+            // 40 delta E for the selection: unmistakably a different colour, not
+            // a shade. 3 for hover: visible, and nothing like the selection. 4.5
+            // for type is WCAG AA for normal text.
+            const auto ok = selectedFill >= 40.0f && hoverFill >= 3.0f && hoverApart >= 40.0f
+                                && litText >= 4.5f && restText >= 4.5f && hoverText >= 4.5f;
 
             problems += ok ? 0 : 1;
 
-            char detail[220];
+            char detail[240];
             std::snprintf (detail, sizeof (detail),
-                           "%-12s selected:rest %.2f  rest:bed %.2f  mark:bed %.2f  hover:rest %.2f  faint mark:bed %.2f  mark:faint %.2f",
-                           candidate.name.toRawUTF8(), selection, legible, marker,
-                           hoverVisible, markSeen, markApart);
+                           "fills dE: selected:rest %.1f  hover:rest %.1f  selected:hover %.1f   "
+                           "type: on lit %.2f  on rest %.2f  on hover %.2f",
+                           selectedFill, hoverFill, hoverApart, litText, restText, hoverText);
 
             std::printf ("  %s  %s\n", ok ? "PASS" : "FAIL", detail);
         }
@@ -707,7 +723,6 @@ int main (int argc, char** argv)
         // 4.5 - both visible below.
         processor.setSpectrumTiltDb (2.5f);
 
-        processor.setTheme (themeByName ("Graphite"));
         processor.setFloatParameter (FXParams::inputGainDb, 12.0f);
         processor.setChoiceParameter (FXParams::channel, (int) FXParams::Channel::side);
 
@@ -763,7 +778,6 @@ int main (int argc, char** argv)
                    "expected 6.0, got " + juce::String (legacy.getSpectrumTiltDb(), 2));
         }
 
-        check (restored.getTheme().name == "Graphite", "theme", restored.getTheme().name);
         check (std::abs (restored.getFloatParameter (FXParams::inputGainDb) - 12.0f) < 0.01f,
                "inputGainDb", juce::String (restored.getFloatParameter (FXParams::inputGainDb), 2));
         check (restored.getChoiceParameter (FXParams::channel) == (int) FXParams::Channel::side,
@@ -813,91 +827,40 @@ int main (int argc, char** argv)
                    "View steps 2D, Bars 31, Bars 63, Sonogram", FXParams::spectrumModeNames.joinIntoString (", "));
         }
 
-        // ---- the theme: seven colours, the rest derived ------------------
+        // ---- a session saved while there were themes ---------------------
         //
-        // Since 2026-09-24 a theme stores seven colours and derives four more.
-        // What can go wrong with that is quiet: an old theme file that no
-        // longer loads, a derived colour that stops following its base, a
-        // pasted colour that is read as transparent black. Each is asked here.
-        std::printf ("\nTheme\n\n");
+        // Until 0.2 the state carried a themeName property and a <Theme> child
+        // with the colours. Nothing reads them now; what has to hold is that a
+        // session carrying them still restores everything else.
+        std::printf ("\nOld theme data\n\n");
 
         {
-            check (Theme::numColours() == 7, "seven colours are stored",
-                   juce::String (Theme::numColours()));
+            auto xml = juce::AudioProcessor::getXmlFromBinary (saved.getData(), (int) saved.getSize());
+            check (xml != nullptr, "the saved state parses", {});
 
-            juce::StringArray names;
-
-            for (int i = 0; i < Theme::numColours(); ++i)
-                names.addIfNotAlreadyThere (Theme::colourName (i));
-
-            check (names.size() == Theme::numColours(), "every colour has its own name",
-                   names.joinIntoString (", "));
-
-            check (builtInThemes().size() == 3
-                       && builtInThemes()[0].name == "Paper"
-                       && builtInThemes()[1].name == "Slate"
-                       && builtInThemes()[2].name == "Graphite",
-                   "three themes ship, Paper first", juce::String ((int) builtInThemes().size()));
-
-            check (Theme{}.toJson() == builtInThemes().front().toJson(),
-                   "a default Theme is the default theme", Theme{}.name);
-
-            Theme edited = builtInThemes().front();
-            const auto before = edited.gridMinor();
-            edited.grid = juce::Colour (0x80ff0000);
-            check (edited.gridMinor() != before
-                       && std::abs (edited.gridMinor().getFloatAlpha()
-                                    - 0.5f * Theme::gridMinorAlpha) < 0.01f,
-                   "a derived colour follows its base", edited.gridMinor().toDisplayString (true));
-
-            // An export from before the change: fifteen keys. The seven that
-            // still exist are read, the rest ignored - never refused.
-            const juce::String oldJson =
-                R"({"name":"Old","background":"FF33363A","panel":"FF2C2F33","header":"FF33363A",)"
-                R"("outline":"FFE8A33D","grid":"FF42464B","gridMinor":"FF3B3F44","curve":"FFE8A33D",)"
-                R"("curveFill":"55E8A33D","curveAlt":"FF7FBDE0","warning":"FFE0523D","text":"FFE8ECEF",)"
-                R"("dimText":"FF9AA1A8","accent":"FFE8A33D","accentDim":"FF8F6628","led":"FFF0B957"})";
-
-            Theme imported;
-            const auto importedOk = Theme::fromJson (oldJson, imported);
-            check (importedOk && imported.curve == juce::Colour (0xffe8a33d)
-                       && imported.background == juce::Colour (0xff33363a),
-                   "a fifteen-colour theme file still imports", imported.name);
-
-            const auto roundTrip = Theme::fromValueTree (builtInThemes()[1].toValueTree());
-            check (roundTrip.toJson() == builtInThemes()[1].toJson(),
-                   "a theme survives the session tree", roundTrip.name);
-
-            struct Case { const char* text; bool accepted; juce::uint32 argb; };
-
-            const Case cases[]
+            if (xml != nullptr)
             {
-                { "#80FF0000",   true,  0x80ff0000 },
-                { "80ff0000",    true,  0x80ff0000 },
-                { "#2A64A8",     true,  0xff2a64a8 },
-                { "  2a64a8 \n", true,  0xff2a64a8 },
-                { "#12345",      false, 0 },
-                { "hello world", false, 0 },
-                { "#GG0000",     false, 0 },
-                { "",            false, 0 }
-            };
+                xml->setAttribute ("themeName", "Graphite");
+                auto* themeNode = xml->createNewChildElement ("Theme");
+                themeNode->setAttribute ("name", "Graphite");
+                themeNode->setAttribute ("background", "FF2B2D31");
+                themeNode->setAttribute ("curve", "FFE8A33D");
 
-            for (const auto& c : cases)
-            {
-                juce::Colour parsed (0x12345678);
-                const auto ok = parseColourText (c.text, parsed);
-                const auto right = ok == c.accepted
-                                       && (c.accepted ? parsed.getARGB() == c.argb
-                                                      : parsed.getARGB() == 0x12345678u);
+                juce::MemoryBlock old;
+                juce::AudioProcessor::copyXmlToBinary (*xml, old);
 
-                check (right, juce::String ("paste \"") + juce::String (c.text).trim() + "\"",
-                       ok ? colourToText (parsed) : juce::String ("refused"));
+                FXAnalyzerProcessor withTheme;
+                withTheme.setPlayConfigDetails (2, 2, sampleRate, blockSize);
+                withTheme.prepareToPlay (sampleRate, blockSize);
+                withTheme.setStateInformation (old.getData(), (int) old.getSize());
+
+                check (std::abs (withTheme.getFloatParameter (FXParams::inputGainDb) - 12.0f) < 0.01f
+                           && withTheme.getChoiceParameter (FXParams::channel) == (int) FXParams::Channel::side
+                           && std::abs (withTheme.getSpectrumTiltDb() - 2.5f) < 0.001f,
+                       "a session with a theme in it restores the rest",
+                       "gain " + juce::String (withTheme.getFloatParameter (FXParams::inputGainDb), 1)
+                           + ", tilt " + juce::String (withTheme.getSpectrumTiltDb(), 1));
             }
-
-            juce::Colour back;
-            check (parseColourText (colourToText (juce::Colour (0x5a2a64a8)), back)
-                       && back == juce::Colour (0x5a2a64a8),
-                   "what Copy writes, Paste reads", colourToText (juce::Colour (0x5a2a64a8)));
         }
 
         // ---- the numeric stepper's value semantics ----------------------
@@ -911,7 +874,7 @@ int main (int argc, char** argv)
 
         {
             StepperControl stepper;
-            stepper.setTheme (builtInThemes().front());
+            stepper.setTheme (Theme{});
             stepper.setNumericRange (FXParams::inputGainMinDb, FXParams::inputGainMaxDb,
                                      1.0f, 0.0f,
                                      [] (float db) { return juce::String (db, 1) + " dB"; });
@@ -1055,22 +1018,6 @@ int main (int argc, char** argv)
         return 0;
     }
 
-    if (themeName.isNotEmpty())
-    {
-        const auto theme = themeByName (themeName);
-
-        // themeByName falls back to the default rather than failing, which is
-        // right in the plugin and wrong here: a typo would silently render the
-        // default theme and be reported as a passing theme test.
-        if (theme.name != themeName)
-        {
-            std::printf ("FAIL: no built-in theme called '%s'\n", themeName.toRawUTF8());
-            return 1;
-        }
-
-        processor.setTheme (theme);
-    }
-
     // The null test again, through the real processBlock this time.
     //
     // Before the demo audio, and that ordering is not cosmetic. This pushes a
@@ -1140,6 +1087,9 @@ int main (int argc, char** argv)
         return 1;
     }
 
+    editor->setSize (juce::roundToInt ((float) Layout::defaultWidth * scale),
+                     juce::roundToInt ((float) Layout::defaultHeight * scale));
+
     int written = 0;
 
     // The linear spectrum is rendered as a seventh shot rather than left to
@@ -1160,21 +1110,20 @@ int main (int argc, char** argv)
     // And one for Bars 63, because a bar count that doubles is a layout
     // question - do the gaps swallow the bars at 900 points? - only a picture
     // answers.
-    const auto totalShots = FXParams::numPages + 9;
+    const auto totalShots = FXParams::numPages + 8;
 
     for (int shot = 0; shot < totalShots; ++shot)
     {
         const auto linearPass = shot == FXParams::numPages;
         const auto rawPass    = shot == FXParams::numPages + 1;
         const auto rangePass  = shot == FXParams::numPages + 2;
-        const auto coloursPass = shot == FXParams::numPages + 3;
-        const auto scopePass   = shot == FXParams::numPages + 5;
-        const auto singlePass  = shot == FXParams::numPages + 4;
-        const auto bassPass    = shot == FXParams::numPages + 6;
-        const auto bassLongPass = shot == FXParams::numPages + 7;
-        const auto bars63Pass   = shot == FXParams::numPages + 8;
+        const auto singlePass  = shot == FXParams::numPages + 3;
+        const auto scopePass   = shot == FXParams::numPages + 4;
+        const auto bassPass    = shot == FXParams::numPages + 5;
+        const auto bassLongPass = shot == FXParams::numPages + 6;
+        const auto bars63Pass   = shot == FXParams::numPages + 7;
         const auto page = scopePass ? (int) FXParams::Page::scope
-                        : (linearPass || rawPass || rangePass || coloursPass || singlePass
+                        : (linearPass || rawPass || rangePass || singlePass
                            || bassPass || bassLongPass || bars63Pass)
                               ? (int) FXParams::Page::spectrum : shot;
 
@@ -1271,48 +1220,25 @@ int main (int argc, char** argv)
                 juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
         }
 
-        // The colour editor lives in a window of its own now, so painting the
-        // plugin editor no longer contains it. Rendering the component directly
-        // is what keeps this shot a check rather than a second copy of the
-        // spectrum page - a verification that quietly stops verifying is worse
-        // than one that fails.
-        const auto colourSize = juce::Point<int> (640, 400);
-
-        juce::Image image (juce::Image::ARGB,
-                           coloursPass ? colourSize.x : editor->getWidth(),
-                           coloursPass ? colourSize.y : editor->getHeight(),
-                           true);
+        juce::Image image (juce::Image::ARGB, editor->getWidth(), editor->getHeight(), true);
 
         {
             juce::Graphics g (image);
-
-            if (coloursPass)
-            {
-                ColourEditor colours (processor);
-                colours.setTheme (themeName.isEmpty() ? builtInThemes().front()
-                                                      : themeByName (themeName));
-                colours.setSize (colourSize.x, colourSize.y);
-                colours.paintEntireComponent (g, true);
-            }
-            else
-            {
-                editor->paintEntireComponent (g, true);
-            }
+            editor->paintEntireComponent (g, true);
         }
 
         const auto name = FXParams::pageNames[page].toLowerCase()
                               + (linearPass ? "-linear" : "")
                               + (rawPass ? "-unsmoothed" : "")
                               + (rangePass ? "-narrow-range" : "")
-                              + (coloursPass ? "-colours" : "")
                               + (singlePass ? "-single-resolution" : "")
                               + (bassPass ? "-bass-zoom" : "")
                               + (bassLongPass ? "-bass-zoom-65536" : "")
                               + (bars63Pass ? "-bars63" : "")
                               + (scopePass ? "-longest" : "");
-        const auto suffix = themeName.isEmpty() ? juce::String()
-                                                : "-" + themeName.toLowerCase().replaceCharacter (' ', '-');
-        const auto file = outputDirectory.getChildFile ("page-" + name + suffix + ".png");
+        const auto scaleSuffix = std::abs (scale - 1.0f) < 0.001f ? juce::String()
+                                                                  : "-x" + juce::String (scale, 2);
+        const auto file = outputDirectory.getChildFile ("page-" + name + scaleSuffix + ".png");
 
         juce::PNGImageFormat format;
 
@@ -1335,12 +1261,13 @@ int main (int argc, char** argv)
         ++written;
     }
 
+    const auto renderedSize = editor->getBounds().getBottomRight();
+
     processor.editorBeingDeleted (base.get());
     base.reset();
 
-    std::printf ("%d shots rendered at %d x %d in the %s theme into %s\n",
-                 written, Layout::defaultWidth, Layout::defaultHeight,
-                 themeName.isEmpty() ? "default" : themeName.toRawUTF8(),
+    std::printf ("%d shots rendered at %d x %d into %s\n",
+                 written, renderedSize.x, renderedSize.y,
                  outputDirectory.getFullPathName().toRawUTF8());
 
     return 0;

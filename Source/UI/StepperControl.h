@@ -30,7 +30,11 @@ public:
         space, which is what the compact steppers beside a graph want. */
     void setLabel (const juce::String& newLabel);
 
-    /** Compact steppers set their value in the tab strip's type rather than the
+    /** Kept for the callers; since 0.2 it changes nothing. The value sits on a
+        flat button, and a button has one height on this panel. What follows is
+        why there were two sizes before.
+
+        Compact steppers set their value in the tab strip's type rather than the
         panel's large value type.
 
         The two sizes exist because the two positions are read differently. On
@@ -117,6 +121,10 @@ private:
     std::function<juce::String (float)> numericFormatter;
 
     juce::Rectangle<int> labelArea, upArea, valueArea, downArea;
+
+    static constexpr int labelRowHeight = 12;
+    static constexpr int labelGap       = 6;
+    static constexpr int buttonHeight   = 22;
     Zone hoverZone = Zone::none;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepperControl)

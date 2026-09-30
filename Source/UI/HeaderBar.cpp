@@ -12,10 +12,24 @@ HeaderBar::HeaderBar()
     setInterceptsMouseClicks (true, false);
 }
 
-void HeaderBar::setTitle (const juce::String& newTitle)
+void HeaderBar::setPage (const juce::String& name, const juce::String& description)
 {
-    title = newTitle;
+    if (name == pageName && description == pageDescription)
+        return;
+
+    pageName = name;
+    pageDescription = description;
     repaint();
+}
+
+void HeaderBar::setStatus (const juce::String& text, bool isFrozen)
+{
+    if (text == status && isFrozen == frozen)
+        return;
+
+    status = text;
+    frozen = isFrozen;
+    repaint (displayArea);
 }
 
 void HeaderBar::setPresetName (const juce::String& newName)
@@ -43,43 +57,81 @@ void HeaderBar::setActivity (float level)
 //==============================================================================
 void HeaderBar::resized()
 {
-    auto area = getLocalBounds().reduced (14, 8);
+    // Fixed sizes, centred in whatever height the header is given: the header
+    // grows with the window, the type does not.
+    auto area = getLocalBounds().reduced (13, 0).withSizeKeepingCentre (getWidth() - 26, 52);
 
-    // No lamp any more, so the title starts at the panel's own left margin
-    // rather than where the lamp used to leave it.
-    lampArea = {};
+    wordmarkArea = area.removeFromLeft (262);
+    area.removeFromLeft (13);
 
-    menuArea   = area.removeFromRight (40);
-    presetArea = area.removeFromRight (120);
-    titleArea  = area;
+    auto buttons = area.removeFromRight (120);
+    area.removeFromRight (10);
+
+    presetArea = buttons.removeFromTop (22);
+    menuArea   = buttons.removeFromBottom (22);
+    displayArea = area;
 }
 
 void HeaderBar::paint (juce::Graphics& g)
 {
     const auto& t = theme();
 
-    g.setColour (t.background);
-    g.fillRect (getLocalBounds());
-
-    g.setColour (t.text);
-    g.setFont (t.titleFont());
-    g.drawText (title, titleArea, juce::Justification::centredLeft, false);
-
-    g.setColour (hoveringPreset ? t.text : t.dimText());
-    g.setFont (t.labelFont().withHeight (t.labelSize + 4.0f));
-    g.drawText (presetName + "  " + utf8 ("\xe2\x96\xb6"), presetArea, juce::Justification::centredRight, false);
-
-    // Three lines, drawn at the same weight as the chevrons so the header does
-    // not look like it was assembled from two different panels.
-    const auto burger = menuArea.toFloat().withSizeKeepingCentre (26.0f, 18.0f);
-
-    g.setColour (hoveringMenu ? t.accent : t.text);
-
-    for (int line = 0; line < 3; ++line)
+    // The wordmark, as on Kitbox and Rackbox: the first word in the accent,
+    // the second in ink, and a line of small print under it.
     {
-        const auto y = burger.getY() + burger.getHeight() * 0.5f * (float) line;
-        g.fillRoundedRectangle (burger.getX(), y, burger.getWidth(), 2.6f, 1.3f);
+        auto area = wordmarkArea.toFloat();
+        const auto font = juce::Font (juce::FontOptions (30.0f, juce::Font::bold)).withExtraKerningFactor (0.16f);
+        const auto fxWidth = juce::GlyphArrangement::getStringWidth (font, "FX");
+
+        auto nameRow = area.removeFromTop (32.0f);
+        g.setFont (font);
+        g.setColour (t.accent);
+        g.drawText ("FX", nameRow, juce::Justification::centredLeft, false);
+        g.setColour (t.text);
+        g.drawText ("ANALYZER", nameRow.withTrimmedLeft (fxWidth + 1.0f), juce::Justification::centredLeft, false);
+
+        area.removeFromTop (6.0f);
+        g.setColour (t.label);
+        g.setFont (t.labelFont());
+        g.drawText ("6-PAGE ANALYZER", area.removeFromTop (12.0f), juce::Justification::centredLeft, false);
     }
+
+    // The display: which page, what it is for, and the state of the input.
+    {
+        g.setColour (t.bed);
+        g.fillRoundedRectangle (displayArea.toFloat(), 6.0f);
+
+        auto inner = displayArea.reduced (14, 0);
+        auto top = inner.withY (displayArea.getY() + 10).withHeight (18);
+
+        g.setColour (frozen ? t.warning : t.bedDim);
+        g.setFont (t.axisFont().withHeight (10.5f));
+        g.drawText (frozen ? "FROZEN  " + utf8 ("\xc2\xb7") + "  " + status : status,
+                    top, juce::Justification::centredRight, false);
+
+        g.setColour (t.bedText);
+        g.setFont (Theme::numberFont (14.0f, true));
+        g.drawText (pageName, top, juce::Justification::centredLeft, false);
+
+        g.setColour (t.bedDim);
+        g.setFont (t.axisFont().withHeight (10.5f));
+        g.drawText (pageDescription, inner.withY (displayArea.getY() + 30).withHeight (14),
+                    juce::Justification::centredLeft, true);
+    }
+
+    // Preset and menu, as flat buttons.
+    const auto button = [&] (juce::Rectangle<int> area, const juce::String& text, bool hovered)
+    {
+        g.setColour (hovered ? t.buttonHover : t.button);
+        g.fillRoundedRectangle (area.toFloat(), 5.0f);
+
+        g.setColour (t.text);
+        g.setFont (t.labelFont());
+        g.drawText (text, area.reduced (6, 0), juce::Justification::centred, true);
+    };
+
+    button (presetArea, presetName.toUpperCase() + "  " + utf8 ("\xe2\x96\xb8"), hoveringPreset);
+    button (menuArea, "MENU", hoveringMenu);
 }
 
 //==============================================================================
