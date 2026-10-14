@@ -114,6 +114,9 @@ private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
 
     void applyTheme();
+
+    /** Light or dark panel, saved for the user (not the session). */
+    void setDarkMode (bool shouldBeDark);
     void unmuteStandaloneInput();
     void showMenu();
     void showPresetMenu();
@@ -187,7 +190,10 @@ private:
 
     std::array<PageBase*, FXParams::numPages> pages;
 
-    const Theme theme;
+    /** The light panel or the dark one (Theme::make); swapped whole by
+        setDarkMode and handed down again by applyTheme. */
+    Theme theme;
+    bool shownDark = false;
 
     /** The footer line, in the tab strip's click-dead band at the bottom. */
     juce::Rectangle<int> footerArea;

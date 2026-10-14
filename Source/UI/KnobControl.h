@@ -15,8 +15,8 @@
 //
 //  A juce::Slider rather than a ThemedComponent, so it keeps the Slider's drag,
 //  wheel and double-click-to-reset behaviour. It cannot be both, so it holds a
-//  Theme of its own; the design is fixed, so that is the same Theme every other
-//  component holds.
+//  Theme of its own, and ThemedComponent's walk down the tree passes it by:
+//  the page that owns a knob hands it the theme in its themeChanged().
 //
 
 #pragma once
@@ -29,6 +29,13 @@ public:
     KnobControl (const juce::String& labelText, bool isBipolar);
 
     void paint (juce::Graphics&) override;
+
+    /** The light or dark panel, from the owning page's themeChanged(). */
+    void setTheme (const Theme& newTheme)
+    {
+        palette = newTheme;
+        repaint();
+    }
 
     /** Dial, then the name, then the value. */
     static constexpr int labelHeight = 26;

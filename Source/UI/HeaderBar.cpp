@@ -41,6 +41,15 @@ void HeaderBar::setPresetName (const juce::String& newName)
     repaint();
 }
 
+void HeaderBar::setDarkLit (bool lit)
+{
+    if (darkLit == lit)
+        return;
+
+    darkLit = lit;
+    repaint (darkArea);
+}
+
 void HeaderBar::setActivity (float level)
 {
     const auto clamped = juce::jlimit (0.0f, 1.0f, level);
@@ -62,6 +71,11 @@ void HeaderBar::resized()
     auto area = getLocalBounds().reduced (13, 0).withSizeKeepingCentre (getWidth() - 26, 52);
 
     wordmarkArea = area.removeFromLeft (262);
+
+    // Right-aligned on the small print's line under the wordmark, which ends
+    // long before it - Kitbox has it under its wordmark, but this header has
+    // no room below.
+    darkArea = { wordmarkArea.getRight() - 52, wordmarkArea.getY() + 35, 52, 17 };
     area.removeFromLeft (13);
 
     auto buttons = area.removeFromRight (120);
@@ -120,18 +134,19 @@ void HeaderBar::paint (juce::Graphics& g)
     }
 
     // Preset and menu, as flat buttons.
-    const auto button = [&] (juce::Rectangle<int> area, const juce::String& text, bool hovered)
+    const auto button = [&] (juce::Rectangle<int> area, const juce::String& text, bool hovered, bool lit)
     {
-        g.setColour (hovered ? t.buttonHover : t.button);
+        g.setColour (lit ? t.accent : (hovered ? t.buttonHover : t.button));
         g.fillRoundedRectangle (area.toFloat(), 5.0f);
 
-        g.setColour (t.text);
+        g.setColour (lit ? t.onAccent : t.text);
         g.setFont (t.labelFont());
         g.drawText (text, area.reduced (6, 0), juce::Justification::centred, true);
     };
 
-    button (presetArea, presetName.toUpperCase() + "  " + utf8 ("\xe2\x96\xb8"), hoveringPreset);
-    button (menuArea, "MENU", hoveringMenu);
+    button (presetArea, presetName.toUpperCase() + "  " + utf8 ("\xe2\x96\xb8"), hoveringPreset, false);
+    button (menuArea, "MENU", hoveringMenu, false);
+    button (darkArea, "DARK", hoveringDark, darkLit);
 }
 
 //==============================================================================
@@ -141,26 +156,30 @@ void HeaderBar::mouseDown (const juce::MouseEvent& event)
         onPresetClicked();
     else if (menuArea.contains (event.getPosition()) && onMenuClicked != nullptr)
         onMenuClicked();
+    else if (darkArea.contains (event.getPosition()) && onDarkClicked != nullptr)
+        onDarkClicked();
 }
 
 void HeaderBar::mouseMove (const juce::MouseEvent& event)
 {
     const auto preset = presetArea.contains (event.getPosition());
     const auto menu   = menuArea.contains (event.getPosition());
+    const auto dark   = darkArea.contains (event.getPosition());
 
-    if (preset != hoveringPreset || menu != hoveringMenu)
+    if (preset != hoveringPreset || menu != hoveringMenu || dark != hoveringDark)
     {
         hoveringPreset = preset;
         hoveringMenu   = menu;
+        hoveringDark   = dark;
         repaint();
     }
 }
 
 void HeaderBar::mouseExit (const juce::MouseEvent&)
 {
-    if (hoveringPreset || hoveringMenu)
+    if (hoveringPreset || hoveringMenu || hoveringDark)
     {
-        hoveringPreset = hoveringMenu = false;
+        hoveringPreset = hoveringMenu = hoveringDark = false;
         repaint();
     }
 }

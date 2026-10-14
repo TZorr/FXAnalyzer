@@ -20,6 +20,26 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 
+namespace
+{
+    /** The panel's theme is the user's, not the session's: it lives in
+        ~/Library/Application Support/FX Analyzer/FX Analyzer.settings, shared
+        by every instance and every project, and never travels with a session
+        or a .fxapreset - as on Kitbox. */
+    std::unique_ptr<juce::PropertiesFile> openSettings()
+    {
+        juce::PropertiesFile::Options options;
+        options.applicationName     = JucePlugin_Name;
+        options.filenameSuffix      = ".settings";
+        options.folderName          = JucePlugin_Name;
+        options.osxLibrarySubFolder = "Application Support";
+        options.getDefaultFile().getParentDirectory().createDirectory();
+        return std::make_unique<juce::PropertiesFile> (options);
+    }
+
+    constexpr const char* darkModeKey = "darkMode";
+}
+
 //==============================================================================
 // The parameter is not called `processor`: AudioProcessorEditor already has a
 // member of that name, and a constructor parameter shadowing it means the
@@ -44,6 +64,7 @@ FXAnalyzerEditor::FXAnalyzerEditor (FXAnalyzerProcessor& processorToUse)
 
     header.onMenuClicked   = [this] { showMenu(); };
     header.onPresetClicked = [this] { showPresetMenu(); };
+    header.onDarkClicked   = [this] { setDarkMode (! Theme::darkPanel); };
 
     tabs.setTabs (FXParams::pageNames);
     tabs.onChange = [this] (int index) { selectPage (index, "tab click"); };
@@ -63,6 +84,12 @@ FXAnalyzerEditor::FXAnalyzerEditor (FXAnalyzerProcessor& processorToUse)
     addMouseListener (this, true);
 
     plugin.addChangeListener (this);
+
+    // The saved theme first, so the first paint is already the right one.
+    Theme::darkPanel = openSettings()->getBoolValue (darkModeKey, false);
+    shownDark = Theme::darkPanel;
+    theme = Theme::make (shownDark);
+    header.setDarkLit (shownDark);
 
     applyTheme();
     unmuteStandaloneInput();
@@ -218,8 +245,9 @@ void FXAnalyzerEditor::unmuteStandaloneInput()
 
 void FXAnalyzerEditor::applyTheme()
 {
-    // One fixed design since 0.2, handed down once. ThemedComponent passes it
-    // on to every child, so no widget can hold a colour of its own.
+    // One design since 0.2, light or dark since 0.2.1, handed down whole.
+    // ThemedComponent passes it on to every child, so no widget can hold a
+    // colour of its own - and a switch reaches every one of them.
     header.setTheme (theme);
     tabs.setTheme (theme);
 
@@ -228,6 +256,24 @@ void FXAnalyzerEditor::applyTheme()
 
     resized();
     repaint();
+}
+
+void FXAnalyzerEditor::setDarkMode (bool shouldBeDark)
+{
+    Theme::darkPanel = shouldBeDark;
+
+    if (auto settings = openSettings())
+    {
+        settings->setValue (darkModeKey, shouldBeDark);
+        settings->saveIfNeeded();
+    }
+
+    record (shouldBeDark ? "panel dark" : "panel light");
+
+    shownDark = shouldBeDark;
+    theme = Theme::make (shouldBeDark);
+    header.setDarkLit (shouldBeDark);
+    applyTheme();
 }
 
 void FXAnalyzerEditor::setRefreshRateHz (int hz)
@@ -351,6 +397,15 @@ void FXAnalyzerEditor::timerCallback()
 void FXAnalyzerEditor::advanceOneFrame()
 {
     ++frameCount;
+
+    // Another FX Analyzer window may have switched the theme: it is process-wide.
+    if (shownDark != Theme::darkPanel)
+    {
+        shownDark = Theme::darkPanel;
+        theme = Theme::make (shownDark);
+        header.setDarkLit (shownDark);
+        applyTheme();
+    }
 
     plugin.getAnalysis().updateDisplays();
 

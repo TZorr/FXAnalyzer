@@ -421,9 +421,11 @@ int main (int argc, char** argv)
         // grey are close in luminance (about 1.2:1) while being nothing alike
         // in colour. A luminance ratio would call that invisible. So the fills
         // are compared by colour distance, CIE76 delta E in Lab, and the text on
-        // them by WCAG contrast, which is the right measure for type.
+        // them by WCAG contrast, which is the right measure for type. Both
+        // panels, light and dark, are held to the same floors.
+        for (const bool dark : { false, true })
         {
-            const Theme t;
+            const auto t = Theme::make (dark);
 
             const auto selectedFill = colourDistance (t.accent, t.button);
             const auto hoverFill    = colourDistance (t.buttonHover, t.button);
@@ -442,8 +444,9 @@ int main (int argc, char** argv)
 
             char detail[240];
             std::snprintf (detail, sizeof (detail),
-                           "fills dE: selected:rest %.1f  hover:rest %.1f  selected:hover %.1f   "
+                           "%s  fills dE: selected:rest %.1f  hover:rest %.1f  selected:hover %.1f   "
                            "type: on lit %.2f  on rest %.2f  on hover %.2f",
+                           dark ? "dark: " : "light:",
                            selectedFill, hoverFill, hoverApart, litText, restText, hoverText);
 
             std::printf ("  %s  %s\n", ok ? "PASS" : "FAIL", detail);
@@ -1110,22 +1113,33 @@ int main (int argc, char** argv)
     // And one for Bars 63, because a bar count that doubles is a layout
     // question - do the gaps swallow the bars at 900 points? - only a picture
     // answers.
-    const auto totalShots = FXParams::numPages + 8;
+    // And the six pages once more on the dark panel. Theme::darkPanel, not the
+    // button, so the user's saved choice is neither read back nor written; the
+    // editor's frame picks the switch up during the settle, as a second window
+    // would. Light first, whatever the user last chose.
+    const auto lightShots = FXParams::numPages + 8;
+    const auto totalShots = lightShots + FXParams::numPages;
+
+    Theme::darkPanel = false;
 
     for (int shot = 0; shot < totalShots; ++shot)
     {
-        const auto linearPass = shot == FXParams::numPages;
-        const auto rawPass    = shot == FXParams::numPages + 1;
-        const auto rangePass  = shot == FXParams::numPages + 2;
-        const auto singlePass  = shot == FXParams::numPages + 3;
-        const auto scopePass   = shot == FXParams::numPages + 4;
-        const auto bassPass    = shot == FXParams::numPages + 5;
-        const auto bassLongPass = shot == FXParams::numPages + 6;
-        const auto bars63Pass   = shot == FXParams::numPages + 7;
+        const auto darkPass = shot >= lightShots;
+        const auto variant  = darkPass ? shot - lightShots : shot;
+        Theme::darkPanel = darkPass;
+
+        const auto linearPass = variant == FXParams::numPages;
+        const auto rawPass    = variant == FXParams::numPages + 1;
+        const auto rangePass  = variant == FXParams::numPages + 2;
+        const auto singlePass  = variant == FXParams::numPages + 3;
+        const auto scopePass   = variant == FXParams::numPages + 4;
+        const auto bassPass    = variant == FXParams::numPages + 5;
+        const auto bassLongPass = variant == FXParams::numPages + 6;
+        const auto bars63Pass   = variant == FXParams::numPages + 7;
         const auto page = scopePass ? (int) FXParams::Page::scope
                         : (linearPass || rawPass || rangePass || singlePass
                            || bassPass || bassLongPass || bars63Pass)
-                              ? (int) FXParams::Page::spectrum : shot;
+                              ? (int) FXParams::Page::spectrum : variant;
 
         // The bass zoom, twice. The long window is the point of the pair: at
         // 4096 there is already more than one pixel per bin across the whole
@@ -1235,7 +1249,8 @@ int main (int argc, char** argv)
                               + (bassPass ? "-bass-zoom" : "")
                               + (bassLongPass ? "-bass-zoom-65536" : "")
                               + (bars63Pass ? "-bars63" : "")
-                              + (scopePass ? "-longest" : "");
+                              + (scopePass ? "-longest" : "")
+                              + (darkPass ? "-dark" : "");
         const auto scaleSuffix = std::abs (scale - 1.0f) < 0.001f ? juce::String()
                                                                   : "-x" + juce::String (scale, 2);
         const auto file = outputDirectory.getChildFile ("page-" + name + scaleSuffix + ".png");
@@ -1260,6 +1275,8 @@ int main (int argc, char** argv)
 
         ++written;
     }
+
+    Theme::darkPanel = false;
 
     const auto renderedSize = editor->getBounds().getBottomRight();
 

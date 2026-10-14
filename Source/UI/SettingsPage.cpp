@@ -281,7 +281,10 @@ std::vector<StepperControl*> SettingsPage::allSteppers()
 void SettingsPage::themeChanged()
 {
     // ThemedComponent already hands the theme to every child, the preview
-    // included; the layout depends on the type sizes, so it is redone.
+    // included - except the two knobs, which are Sliders and are handed it
+    // here. The layout depends on the type sizes, so it is redone.
+    slopeKnob.setTheme (theme());
+    inputGainKnob.setTheme (theme());
     resized();
 }
 

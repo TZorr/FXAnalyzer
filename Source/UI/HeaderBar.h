@@ -36,8 +36,12 @@ public:
     /** 0 to 1, from the input's recent level. Smoothed by the caller. */
     void setActivity (float level);
 
+    /** Lights the Dark button while the dark panel is on. */
+    void setDarkLit (bool lit);
+
     std::function<void()> onPresetClicked;
     std::function<void()> onMenuClicked;
+    std::function<void()> onDarkClicked;
 
     /** Where the two controls actually are, in screen coordinates.
 
@@ -60,8 +64,9 @@ private:
     juce::String presetName { "Default" };
     float activity = 0.0f;
 
-    juce::Rectangle<int> wordmarkArea, displayArea, presetArea, menuArea;
-    bool hoveringPreset = false, hoveringMenu = false;
+    juce::Rectangle<int> wordmarkArea, displayArea, presetArea, menuArea, darkArea;
+    bool hoveringPreset = false, hoveringMenu = false, hoveringDark = false;
+    bool darkLit = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HeaderBar)
 };

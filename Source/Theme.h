@@ -23,6 +23,10 @@
 //  The values are Rackbox's Palette.h, unchanged, so the three plugins sit
 //  side by side in a host as one family.
 //
+//  Since 0.2.1 the same panel also comes dark (Theme::make), with Kitbox's
+//  dark values: the layout, the orange and the traces stay, the greys turn
+//  round. The choice is the user's, not the session's (see PluginEditor.cpp).
+//
 
 #pragma once
 
@@ -74,6 +78,40 @@ struct Theme
     juce::Colour curveFill() const { return curve.withMultipliedAlpha (curveFillAlpha); }
     juce::Colour dimText()   const { return label; }
     juce::Colour accentDim() const { return accent.withMultipliedAlpha (accentDimAlpha); }
+
+    //==============================================================================
+    /** The light panel (the defaults above) or the dark one. */
+    static Theme make (bool dark)
+    {
+        Theme t;
+
+        if (! dark)
+            return t;
+
+        t.background     = juce::Colour (0xff161513);
+        t.section        = juce::Colour (0xff22201d);
+        t.text           = juce::Colour (0xffece7de);
+        t.label          = juce::Colour (0xff9d978d);
+
+        t.onAccent       = juce::Colour (0xff2c2a27);
+        t.button         = juce::Colour (0xff2f2c28);
+        t.buttonHover    = juce::Colour (0xff3a3631);
+        t.knobFace       = juce::Colour (0xff36332e);
+        t.knobEdge       = juce::Colour (0xff55504a);
+        t.knobTrack      = juce::Colour (0xff3f3b36);
+
+        // The beds go a step darker, as on Kitbox, so they still read as
+        // recessed in a near-black body; the grid keeps its step above them.
+        t.bed            = juce::Colour (0xff0c0b0a);
+        t.grid           = juce::Colour (0xff2a2622);
+        t.bedDim         = juce::Colour (0xffa87043);
+        return t;
+    }
+
+    /** Which of the two every open FX Analyzer window shows. Process-wide, as
+        on Kitbox: a switch in one window reaches the others on their next
+        frame. */
+    static inline bool darkPanel = false;
 
     //==============================================================================
     /** The panel's type: Kitbox's two faces. Names are set bold, upper case and
