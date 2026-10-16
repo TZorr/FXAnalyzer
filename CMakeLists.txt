@@ -49,7 +49,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(FXAnalyzer VERSION 0.2.1)
+project(FXAnalyzer VERSION 0.3.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -156,12 +156,14 @@ set(FXANALYZER_UI_SOURCES
 target_sources(FXAnalyzer PRIVATE
     ${FXANALYZER_CORE_SOURCES}
     ${FXANALYZER_UI_SOURCES}
+    Source/Engine/PresetFile.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp)
 
 target_include_directories(FXAnalyzer PRIVATE Source)
 
 target_compile_definitions(FXAnalyzer PUBLIC
+    TZORR_PRESET_EXTENSION=\".fxapreset\"
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
@@ -214,7 +216,8 @@ juce_add_console_app(EditorShot PRODUCT_NAME "EditorShot")
 target_sources(EditorShot PRIVATE Verification/EditorShot.cpp)
 
 target_compile_definitions(EditorShot PUBLIC
-    JUCE_MODAL_LOOPS_PERMITTED=1)
+    JUCE_MODAL_LOOPS_PERMITTED=1
+    FXANALYZER_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Linking the plugin's own shared-code library rather than recompiling its
 # sources: that library already carries the JucePlugin_* definitions that

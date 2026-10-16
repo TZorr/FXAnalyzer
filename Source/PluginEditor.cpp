@@ -4,6 +4,7 @@
 //
 
 #include "PluginEditor.h"
+#include "Engine/PresetFile.h"
 #include "TextUtf8.h"
 
 // StandalonePluginHolder lives in this header and nowhere else. Including it
@@ -501,10 +502,16 @@ void FXAnalyzerEditor::showPresetMenu()
         {
             const auto saving = result == 2;
 
+            // Beside the family's other presets: ~/Library/Audio/Presets/T'Zorr/FX Analyzer.
+            const auto folder = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+                                    .getChildFile ("Library/Audio/Presets")
+                                    .getChildFile (JucePlugin_Manufacturer)
+                                    .getChildFile (JucePlugin_Name);
+            folder.createDirectory();
+
             chooser = std::make_unique<juce::FileChooser> (
                 saving ? "Save FX Analyzer preset" : "Load FX Analyzer preset",
-                juce::File::getSpecialLocation (juce::File::userDocumentsDirectory),
-                "*.fxapreset");
+                folder, juce::String ("*") + PresetFile::extension);
 
             const auto flags = saving ? (juce::FileBrowserComponent::saveMode
                                              | juce::FileBrowserComponent::warnAboutOverwriting)
@@ -523,24 +530,30 @@ void FXAnalyzerEditor::showPresetMenu()
                     juce::MemoryBlock block;
                     plugin.getStateInformation (block);
 
-                    // Deleted first. juce::File::createOutputStream appends to
-                    // an existing file rather than truncating it, so saving over
-                    // a preset twice leaves two presets in one file and the
-                    // reader silently gets the first.
-                    file.deleteFile();
-                    file.replaceWithData (block.getData(), block.getSize());
+                    // Readable XML (Engine/PresetFile.h). replaceWithText writes
+                    // a temporary file and moves it into place; createOutputStream
+                    // would append to a preset already there.
+                    const auto target = file.withFileExtension (PresetFile::extension);
+                    const auto text = PresetFile::write (block, target.getFileNameWithoutExtension());
+
+                    if (text.isEmpty() || ! target.replaceWithText (text, false, false, "\n"))
+                        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Save Preset",
+                                                                "Could not write " + target.getFullPathName());
                 }
                 else
                 {
-                    juce::MemoryBlock block;
+                    const auto preset = PresetFile::read (file.loadFileAsString());
 
-                    if (file.loadFileAsData (block))
+                    if (! preset.ok())
                     {
-                        plugin.setStateInformation (block.getData(), (int) block.getSize());
-
-                        if (auto* page = currentPage())
-                            page->pageShown();
+                        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Load Preset", preset.error);
+                        return;
                     }
+
+                    plugin.setStateInformation (preset.pluginState.getData(), (int) preset.pluginState.getSize());
+
+                    if (auto* page = currentPage())
+                        page->pageShown();
                 }
             });
         }

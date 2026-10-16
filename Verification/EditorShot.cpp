@@ -35,6 +35,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "PluginEditor.h"
+#include "Engine/PresetFile.h"
 #include "UI/StepperControl.h"
 #include "PluginProcessor.h"
 
@@ -785,6 +786,33 @@ int main (int argc, char** argv)
                "inputGainDb", juce::String (restored.getFloatParameter (FXParams::inputGainDb), 2));
         check (restored.getChoiceParameter (FXParams::channel) == (int) FXParams::Channel::side,
                "channel", juce::String (restored.getChoiceParameter (FXParams::channel)));
+
+        // The same state through a .fxapreset: readable XML naming this
+        // plugin; another plugin's preset and an .aupreset refused.
+        {
+            const auto text = PresetFile::write (saved, "Test");
+            const auto xml = juce::XmlDocument::parse (text);
+            check (xml != nullptr && xml->hasTagName ("TZorrPreset") && xml->getStringAttribute ("plugin") == "Fxan"
+                       && juce::String (PresetFile::extension) == ".fxapreset",
+                   "a .fxapreset is readable XML", text.substring (0, 60).replace ("\n", " "));
+
+            const auto preset = PresetFile::read (text);
+            FXAnalyzerProcessor fromPreset;
+            fromPreset.setPlayConfigDetails (2, 2, sampleRate, blockSize);
+            fromPreset.prepareToPlay (sampleRate, blockSize);
+            fromPreset.setStateInformation (preset.pluginState.getData(), (int) preset.pluginState.getSize());
+            check (preset.ok() && std::abs (fromPreset.getFloatParameter (FXParams::inputGainDb) - 12.0f) < 0.01f
+                       && (int) fromPreset.getViewProperty (FXParams::propPage, -1) == (int) FXParams::Page::stereo,
+                   "a .fxapreset brings it all back", preset.error);
+
+            check (! PresetFile::read (text.replace ("plugin=\"Fxan\"", "plugin=\"Tnbx\"")).ok(),
+                   "another plugin's preset is refused", {});
+            check (! PresetFile::read ("<?xml version=\"1.0\"?><plist version=\"1.0\"><dict/></plist>").ok(),
+                   "an .aupreset is refused", {});
+
+            const auto shipped = juce::File (FXANALYZER_SOURCE_DIR).getChildFile ("default.fxapreset");
+            check (PresetFile::read (shipped.loadFileAsString()).ok(), "default.fxapreset reads", shipped.getFullPathName());
+        }
 
         // And the half that matters to a user: does the panel *show* it? The
         // tree can round-trip perfectly while the open editor keeps displaying

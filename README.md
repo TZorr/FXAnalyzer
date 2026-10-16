@@ -12,6 +12,8 @@ Standalone.
 not the session's or the preset's - every FX Analyzer window and project opens
 the way you left it.
 
+The preset menu's Save Preset… and Load Preset… start in `~/Library/Audio/Presets/T'Zorr/FX Analyzer/`. Since 0.3.0 a `.fxapreset` is plain XML that names the plugin and holds its settings, readable in any text editor; another plugin's preset is refused.
+
 No network code, no telemetry, no account. `JUCE_USE_CURL=0` and
 `JUCE_WEB_BROWSER=0` are set at the build level, not just left unused.
 
