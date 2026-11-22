@@ -1,12 +1,14 @@
 # FX Analyzer
 
-A measurement plugin for macOS: spectrum, oscilloscope, loudness, stereo field
-and pitch, on one panel behind one set of controls. Audio Unit, VST3 and
+A measurement plugin for macOS: spectrum, oscilloscope, loudness, stereo field,
+pitch and a target curve, on one panel behind one set of controls. Audio Unit, VST3 and
 Standalone.
 
-<img src="screenshot.png" width="700" alt="FX Analyzer in Logic Pro">
+<img src="screenshot.png" width="700" alt="FX Analyzer 0.4 in Red on the light panel, showing the Target page: the deviation from Clearbox's 4.5 dB/oct curve with one value per octave">
 
-<img src="screenshot-dark.png" width="700" alt="FX Analyzer in Logic Pro with the dark panel">
+<img src="screenshot-dark.png" width="700" alt="FX Analyzer 0.4 in Orange on the dark panel, showing the Stereo page">
+
+<img src="screenshot-mint.png" width="345" alt="FX Analyzer 0.4 in Mint on the dark panel: the spectrum as bars"> <img src="screenshot-blue.png" width="345" alt="FX Analyzer 0.4 in Blue on the dark panel: the spectrum as a curve">
 
 **MENU > Colour** picks the panel's colours - Orange, Blue, Mint or Red - and
 **MENU > Dark Panel** switches each of them between light and dark. The choice
