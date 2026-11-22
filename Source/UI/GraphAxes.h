@@ -40,8 +40,14 @@ namespace GraphAxes
     void paintDisplay (juce::Graphics&, const Theme&, juce::Rectangle<float> area);
 
     /** The plot inside a display, given the display: the axis gutters taken
-        off the left and the bottom, and a little room at the top and right. */
-    juce::Rectangle<float> plotInDisplay (juce::Rectangle<float> display);
+        off the left and the bottom, and a little room at the top and right -
+        or, withToolbar, the toolbar row (toolbarInDisplay) above it. */
+    juce::Rectangle<float> plotInDisplay (juce::Rectangle<float> display, bool withToolbar = false);
+
+    /** The row along the top of a display for its buttons and small print,
+        above the plot rather than over it (0.4.0). Its left edge lines up with
+        the plot's. */
+    juce::Rectangle<float> toolbarInDisplay (juce::Rectangle<float> display);
 
     /** The bed under the plot itself. Since the display is already the bed
         colour this draws nothing a person would see; it is kept so a page that
@@ -55,7 +61,8 @@ namespace GraphAxes
                              juce::Rectangle<float> plot, juce::Rectangle<float> labelStrip,
                              float minHz, float maxHz, bool logarithmic);
 
-    /** Horizontal lines every stepDb, labelled down the strip to the left. */
+    /** Horizontal lines every stepDb, labelled down the strip to the left, and
+        the unit once, under the bottom label beside the frequency axis. */
     void paintDecibelGrid (juce::Graphics&, const Theme&,
                            juce::Rectangle<float> plot, juce::Rectangle<float> labelStrip,
                            float topDb, float bottomDb, float stepDb);

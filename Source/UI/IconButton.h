@@ -34,6 +34,14 @@ public:
         Freeze is a toggle, Reset is not. */
     void setToggleMode (bool shouldToggle) { toggles = shouldToggle; }
 
+    /** A toggle that shows its state with a lamp before the word instead of
+        lighting up whole (0.4.0: Cursor, Bass and Freeze on a graph). The
+        segmented channel buttons still light up whole - one of them always is. */
+    void setShowsLamp (bool shouldShowLamp) { showsLamp = shouldShowLamp; repaint(); }
+
+    /** The width the button wants for its word: padding, lamp and text. */
+    int getIdealWidth() const;
+
     void setToggleState (bool shouldBeOn);
     bool getToggleState() const noexcept { return on; }
 
@@ -53,6 +61,7 @@ private:
     bool on = false;
     bool hovering = false;
     bool onBed = true;
+    bool showsLamp = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IconButton)
 };

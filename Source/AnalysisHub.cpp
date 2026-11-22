@@ -45,6 +45,11 @@ void AnalysisHub::prepare (double sampleRate, int maximumBlockSize)
     truePeak.prepare (2, maxBlock);
     pitch.prepare    (rate, FXParams::pitchMinHz, FXParams::pitchMaxHz);
 
+    target.prepare (rate, maxBlock);
+    targetLeft.assign ((size_t) maxBlock, 0.0f);
+    targetRight.assign ((size_t) maxBlock, 0.0f);
+    targetWasRunning = false;
+
     // One buffer big enough for whichever reader wants the most. Sized here
     // rather than in the readers so that a change of FFT size cannot allocate
     // on the message thread while the timer is mid-frame.
@@ -321,6 +326,54 @@ void AnalysisHub::pushBlock (const juce::AudioBuffer<float>& buffer) noexcept
 
     const float* ringChannels[] { analysis, left, right };
     ring.write (ringChannels, 3, numSamples);
+
+    // The TARGET page: Clearbox's measurement, fed what Clearbox would be fed. At
+    // L + R that is the raw left and right pair - Clearbox takes the mean power of
+    // the two, so the numbers come out identical, and its absolute gates see the
+    // levels Clearbox would see (no DC blocker, no input gain). Any other selection
+    // is that one signal on both sides.
+    const auto runTarget = targetRunning.load (std::memory_order_relaxed);
+
+    if (runTarget)
+    {
+        if (! targetWasRunning)
+            target.reset();
+
+        auto* tl = targetLeft.data();
+        auto* tr = targetRight.data();
+
+        switch (selected)
+        {
+            case FXParams::Channel::leftPlusRight:
+                juce::FloatVectorOperations::copy (tl, sourceLeft, numSamples);
+                juce::FloatVectorOperations::copy (tr, sourceRight, numSamples);
+                break;
+
+            case FXParams::Channel::left:
+                juce::FloatVectorOperations::copy (tl, sourceLeft, numSamples);
+                juce::FloatVectorOperations::copy (tr, sourceLeft, numSamples);
+                break;
+
+            case FXParams::Channel::right:
+                juce::FloatVectorOperations::copy (tl, sourceRight, numSamples);
+                juce::FloatVectorOperations::copy (tr, sourceRight, numSamples);
+                break;
+
+            case FXParams::Channel::mid:
+            case FXParams::Channel::side:
+            default:
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    tl[i] = 0.5f * (sourceLeft[i] + (selected == FXParams::Channel::side ? -sourceRight[i] : sourceRight[i]));
+                    tr[i] = tl[i];
+                }
+                break;
+        }
+
+        target.process (tl, tr, numSamples, {});
+    }
+
+    targetWasRunning = runTarget;
 }
 
 //==============================================================================

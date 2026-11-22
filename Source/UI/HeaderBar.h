@@ -28,8 +28,9 @@ public:
     void setPage (const juce::String& name, const juce::String& description);
 
     /** The right-hand side of the display's top line: sample rate and channel,
-        and FROZEN while the analysis is held. Repaints only on a change. */
-    void setStatus (const juce::String& text, bool frozen);
+        drawn with a hairline between them, then LIVE - or FROZEN while the
+        analysis is held. Repaints only on a change. */
+    void setStatus (const juce::StringArray& segments, bool frozen);
 
     void setPresetName (const juce::String&);
 
@@ -59,7 +60,8 @@ public:
     void mouseExit (const juce::MouseEvent&) override;
 
 private:
-    juce::String pageName, pageDescription, status;
+    juce::String pageName, pageDescription;
+    juce::StringArray status;
     bool frozen = false;
     juce::String presetName { "Default" };
     float activity = 0.0f;

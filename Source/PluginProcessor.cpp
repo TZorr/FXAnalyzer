@@ -327,6 +327,10 @@ void FXAnalyzerProcessor::setStateInformation (const void* data, int sizeInBytes
 
     parameters.replaceState (restored);
 
+    // Before 2 there was no TARGET page: index 5 was Settings, which is now 6.
+    if (version < 2 && (int) getViewProperty (FXParams::propPage, 0) == 5)
+        setViewProperty (FXParams::propPage, (int) FXParams::Page::settings);
+
     applyDisplaySettings();
 
     sendChangeMessage();

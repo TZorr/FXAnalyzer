@@ -16,6 +16,7 @@ ScopePage::ScopePage (FXAnalyzerProcessor& processor) : PageBase (processor)
     addAndMakeVisible (triggerStepper);
     addAndMakeVisible (gainStepper);
     addAndMakeVisible (freezeButton);
+    freezeButton.setShowsLamp (true);
 
     for (auto* stepper : { &timeStepper, &triggerStepper, &gainStepper })
         stepper->setCompact (true);
@@ -125,7 +126,7 @@ juce::Rectangle<float> ScopePage::displayArea() const
 
 juce::Rectangle<float> ScopePage::plotArea() const
 {
-    return GraphAxes::plotInDisplay (displayArea());
+    return GraphAxes::plotInDisplay (displayArea(), true);
 }
 
 void ScopePage::resized()
@@ -135,8 +136,9 @@ void ScopePage::resized()
 
     layOutStepperColumn (sideColumn, { &timeStepper, &triggerStepper, &gainStepper });
 
-    const auto plot = plotArea().toNearestInt();
-    freezeButton.setBounds (plot.getRight() - 58, plot.getY() + 2, 58, 20);
+    // Freeze in the toolbar row above the plot, as on Spectrum.
+    const auto toolbar = GraphAxes::toolbarInDisplay (displayArea()).toNearestInt();
+    freezeButton.setBounds (toolbar.withLeft (toolbar.getRight() - freezeButton.getIdealWidth()));
 }
 
 void ScopePage::refresh()
@@ -221,19 +223,21 @@ void ScopePage::paint (juce::Graphics& g)
                     juce::Justification::centredRight, false);
     }
 
-    // One status line, at the top left, rather than a note in each corner. The
-    // bottom corner was the first attempt and the trace runs straight through
-    // it on anything with energy below the centre line.
+    // One status line, in the toolbar row above the plot (0.4.0), rather than
+    // a note in each corner. The bottom corner was the first attempt and the
+    // trace runs straight through it on anything with energy below the centre
+    // line; the row above the plot is the one place no trace reaches.
+    const auto dot = utf8 (" \xc2\xb7 ");
     const auto status = juce::String (scope.isTriggered() ? "Triggered" : "Free running")
-                            + "   Peak " + juce::String (juce::Decibels::gainToDecibels (peak, -120.0f), 1) + " dB"
-                            + (gainIndex == 0 ? "   Auto " + utf8 ("\xc3\x97") + juce::String (appliedGain, 1)
+                            + dot + "Peak " + juce::String (juce::Decibels::gainToDecibels (peak, -120.0f), 1) + " dB"
+                            + (gainIndex == 0 ? dot + "Auto " + utf8 ("\xc3\x97") + juce::String (appliedGain, 1)
                                               : juce::String());
 
     g.setColour (scope.isTriggered() ? t.bedDim : t.warning);
     g.setFont (t.axisFont());
-    g.drawText (status,
-                juce::Rectangle<float> (plot.getX() + 8.0f, plot.getY() + 6.0f, 320.0f, 18.0f),
-                juce::Justification::centredLeft, false);
+    const auto toolbar = GraphAxes::toolbarInDisplay (displayArea());
+    g.drawText (status, toolbar.withRight ((float) freezeButton.getX() - 12.0f),
+                juce::Justification::centredLeft, true);
 }
 
 void ScopePage::paintTrace (juce::Graphics& g, const std::vector<float>& samples, int count,

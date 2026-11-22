@@ -8,9 +8,10 @@ Standalone.
 
 <img src="screenshot-dark.png" width="700" alt="FX Analyzer in Logic Pro with the dark panel">
 
-**Dark**, beside the wordmark, switches the panel to dark; the choice is yours,
-not the session's or the preset's - every FX Analyzer window and project opens
-the way you left it.
+**MENU > Colour** picks the panel's colours - Orange, Blue, Mint or Red - and
+**MENU > Dark Panel** switches each of them between light and dark. The choice
+is yours, not the session's or the preset's - every FX Analyzer window and
+project opens the way you left it.
 
 The preset menu's Save Preset… and Load Preset… start in `~/Library/Audio/Presets/T'Zorr/FX Analyzer/`. Since 0.3.0 a `.fxapreset` is plain XML that names the plugin and holds its settings, readable in any text editor; another plugin's preset is refused.
 
@@ -62,7 +63,7 @@ Scripts/install.sh              # install, flush the caches, run auval
 `build.sh` builds, runs 151 measurement assertions, checks that a saved session
 comes back **and that an open panel shows it**, survives a host re-preparing
 under load, then renders fourteen shots
-to `build/shots/*.png` — the six pages plus the spectrum on its linear scale,
+to `build/shots/*.png` — the seven pages plus the spectrum on its linear scale,
 unsmoothed, at a narrow range, at one resolution, zoomed to the bass (twice) and
 as 63 bars, and the scope at its longest time base: surfaces and states no
 default page shot shows, several of which have had a bug only a picture would
@@ -129,7 +130,19 @@ in Options › Audio Settings and it stays muted.
 | **Loudness** | Momentary, short-term and integrated LUFS to BS.1770-4, loudness range to EBU Tech 3342, true peak, and the distance to a chosen target. The integrated value is dimmed until it rests on five seconds of gated material. |
 | **Stereo** | Goniometer rotated so mono is vertical, correlation, balance as a side rather than a signed number, width as side-over-mid energy in dB. |
 | **Pitch** | YIN in the time domain — not the FFT peak, which reports the octave on any string instrument. Note, cents, frequency, and the confidence behind them. Concert pitch adjustable from 415 to 466 Hz. |
+| **Target** | How far the input is from Clearbox's target curve: a rounded 4.5 dB/oct slope, flat from 300 Hz to 2 kHz in SPAN's 4.5 dB/oct view. Above the line is too loud, below too quiet, with one dB value per octave from 63 Hz to 16 kHz to set an external EQ by. See below. |
 | **Settings** | Every setting, sixteen of them in six groups — Resolution, Range, Display, Smoothing, Tilt, Input — under a live preview of the spectrum. See below. |
+
+### The Target page
+
+The Target page shows Clearbox's Analyze view: the measurement is Clearbox's engine, copied unchanged into `Source/Target` and run with every knob at rest.
+- **Identical numbers:** AnalyzerCheck feeds the same signal to the page and to a bare copy of the engine, and asserts that every band reads the same, bit for bit.
+- **Measurement:** a 2 s average in dB per ERB band. A rise is followed in half the time a fall is, and the bass is averaged longer.
+- **HOLD:** below about −55 dBFS the measurement holds and the header says HOLD.
+- **Missing bands:** a band far below the curve counts as missing and shows a dash instead of a number, rather than a deviation an EQ should make up.
+- **Below 47 Hz:** the curve is carried down to 20 Hz with the slope of the two lowest bands (there is no band of its own there).
+- **Channel and Freeze:** the channel selection applies. At L + R it reads the pair as Clearbox does: the raw left and right, before the DC blocker and Input Gain. Freeze holds the picture.
+- **When it runs:** only while the page is on screen. It starts afresh each time the page opens.
 
 ### The Settings page
 
@@ -627,7 +640,7 @@ three sample rates, Tech 3342's definition of loudness range, the definition of
 the DFT, and equal temperament at A440. It also asserts the null.
 
 `EditorShot` builds the plugin headlessly, pushes eight seconds of a synthesised
-signal through it and paints all six pages to PNG, so the layout can be checked
+signal through it and paints all seven pages to PNG, so the layout can be checked
 without a DAW. Its `--hitmap` mode asks a different question: for every pixel of
 the tab strip, at four window sizes, which component would actually receive a
 click there. That is not where the tabs think they are — it is `getComponentAt`,

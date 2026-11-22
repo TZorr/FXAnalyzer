@@ -49,7 +49,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(FXAnalyzer VERSION 0.3.0)
+project(FXAnalyzer VERSION 0.4.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -136,7 +136,9 @@ set(FXANALYZER_CORE_SOURCES
     Source/Oscilloscope.cpp
     Source/StereoAnalyser.cpp
     Source/PitchDetector.cpp
-    Source/AnalysisHub.cpp)
+    Source/AnalysisHub.cpp
+    Source/Target/ClearEngine.cpp
+    Source/Target/ResonanceStage.cpp)
 
 set(FXANALYZER_UI_SOURCES
     Source/Theme.cpp
@@ -151,6 +153,7 @@ set(FXANALYZER_UI_SOURCES
     Source/UI/LoudnessPage.cpp
     Source/UI/StereoPage.cpp
     Source/UI/PitchPage.cpp
+    Source/UI/TargetPage.cpp
     Source/UI/SettingsPage.cpp)
 
 target_sources(FXAnalyzer PRIVATE
@@ -174,6 +177,7 @@ target_compile_definitions(FXAnalyzer PUBLIC
     JUCE_STANDALONE_FILTER_WINDOW_USE_KIOSK_MODE=0)
 
 target_link_libraries(FXAnalyzer PRIVATE
+    "-framework Accelerate"
     juce::juce_audio_utils
     juce::juce_dsp
     juce::juce_gui_extra
@@ -200,6 +204,7 @@ target_compile_definitions(AnalyzerCheck PUBLIC
     JUCE_REPORT_APP_USAGE=0)
 
 target_link_libraries(AnalyzerCheck PRIVATE
+    "-framework Accelerate"
     juce::juce_audio_basics
     juce::juce_dsp
     juce::juce_events

@@ -5,7 +5,7 @@
 //  Every parameter id, range, choice list and default in one place, because a
 //  parameter id is a contract with the host: once a session has been saved
 //  against it, it can never be changed without silently breaking that session.
-//  Scattering the strings across the processor and six pages is how a rename
+//  Scattering the strings across the processor and seven pages is how a rename
 //  gets applied in five of the six places.
 //
 //  The split between "parameter" and "view state" is deliberate and is the one
@@ -38,7 +38,9 @@ namespace FXParams
     /** Moves only when the *shape* of the saved state changes, which lets a
         later build read an earlier session as long as nothing structural has
         moved. It is not the plugin version and must not follow it. */
-    inline constexpr int stateVersion = 1;
+    // 2 (0.4.0): the TARGET page went in before Settings, so a saved page index
+    // of 5 meant Settings before and means TARGET now - see setStateInformation.
+    inline constexpr int stateVersion = 2;
 
     inline constexpr const char* stateTreeType    = "FXAnalyzerState";
     inline constexpr const char* propStateVersion = "stateVersion";
@@ -378,7 +380,7 @@ namespace FXParams
 
     // ---- Pages -------------------------------------------------------------
 
-    enum class Page { spectrum = 0, scope, loudness, stereo, pitch, settings };
+    enum class Page { spectrum = 0, scope, loudness, stereo, pitch, target, settings };
 
     /** How often the panel repaints, and therefore how often the analysis is
         asked to advance. One constant, because the two must agree: the hop cap
@@ -386,10 +388,10 @@ namespace FXParams
         display, and two copies of "30" in two files is a pair that drifts. */
     inline constexpr int displayFramesPerSecond = 30;
 
-    inline constexpr int numPages = 6;
+    inline constexpr int numPages = 7;
 
     inline const juce::StringArray pageNames
-        { "SPECTRUM", "SCOPE", "LOUDNESS", "STEREO", "PITCH", "SETTINGS" };
+        { "SPECTRUM", "SCOPE", "LOUDNESS", "STEREO", "PITCH", "TARGET", "SETTINGS" };
 
     // ---- Spectrum ----------------------------------------------------------
 

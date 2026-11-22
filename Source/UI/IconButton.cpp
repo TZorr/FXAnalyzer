@@ -4,6 +4,7 @@
 //
 
 #include "IconButton.h"
+#include "Surfaces.h"
 
 //==============================================================================
 IconButton::IconButton (Icon iconToDraw) : icon (iconToDraw)
@@ -43,22 +44,51 @@ juce::String IconButton::text() const
     return {};
 }
 
+namespace
+{
+    juce::Font buttonFont() { return Theme::capsFontAt (8.5f); }
+    constexpr float lampDiameter = 6.0f, lampGap = 6.0f, padding = 10.0f;
+}
+
+int IconButton::getIdealWidth() const
+{
+    const auto textWidth = juce::GlyphArrangement::getStringWidth (buttonFont(), text());
+    return juce::roundToInt (2.0f * padding + textWidth + (showsLamp ? lampDiameter + lampGap : 0.0f) + 2.0f);
+}
+
 void IconButton::paint (juce::Graphics& g)
 {
     const auto& t = theme();
     const auto area = getLocalBounds().toFloat();
 
-    // Lit in the accent while on, like every toggle on the panel.
-    const auto fill = on       ? t.accent
+    // Lit in the accent while on, like every toggle on the panel - unless the
+    // button has a lamp, which says it instead.
+    const auto lit = on && ! showsLamp;
+
+    const auto fill = lit      ? t.accent
                     : onBed    ? (hovering ? t.bedButtonHover : t.bedButton)
                                : (hovering ? t.buttonHover : t.button);
 
-    g.setColour (fill);
-    g.fillRoundedRectangle (area, 5.0f);
+    Surfaces::button (g, t, area, fill, lit, onBed, 3.0f);
 
-    g.setColour (on ? t.onAccent : (onBed ? t.curveAlt : t.text));
-    g.setFont (t.labelFont());
-    g.drawText (text(), area.reduced (3.0f, 0.0f), juce::Justification::centred, false);
+    g.setFont (buttonFont());
+    g.setColour (lit ? t.onAccent : (onBed ? t.curveAlt : t.text));
+
+    if (! showsLamp)
+    {
+        g.drawText (text(), area.reduced (3.0f, 0.0f), juce::Justification::centred, false);
+        return;
+    }
+
+    // Lamp and word as one group, centred.
+    const auto textWidth = juce::GlyphArrangement::getStringWidth (buttonFont(), text()) + 2.0f;
+    const auto left = area.getCentreX() - (lampDiameter + lampGap + textWidth) * 0.5f;
+
+    Surfaces::lamp (g, t, { left + lampDiameter * 0.5f, area.getCentreY() }, on, lampDiameter);
+
+    g.setColour (onBed ? t.curveAlt : t.text);
+    g.drawText (text(), juce::Rectangle<float> (left + lampDiameter + lampGap, area.getY(), textWidth, area.getHeight()),
+                juce::Justification::centredLeft, false);
 }
 
 //==============================================================================

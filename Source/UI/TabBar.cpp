@@ -4,6 +4,7 @@
 //
 
 #include "TabBar.h"
+#include "Surfaces.h"
 
 //==============================================================================
 TabBar::TabBar()
@@ -49,12 +50,15 @@ juce::Rectangle<float> TabBar::areaForTab (int index) const
     if (tabs.isEmpty() || ! juce::isPositiveAndBelow (index, tabs.size()))
         return {};
 
-    // Equal widths, as on Rackbox's selector rows. The drawn row is the content
-    // height less a few points above and below, and the panel's 13 point margin
-    // either side, so the row lines up with the displays above it.
+    // Equal widths, as on Rackbox's selector rows. The 0.4.0 design: a 30 point
+    // row 8 under the display (the page's 6 and 2 here) with 14 under it for
+    // the footer, and the panel's 12 point margin either side (10 here, the
+    // editor is inset by 2), so the row lines up with the displays above it.
+    // Scaled with the content height, as the strip itself is.
     const auto drawnHeight = (float) (contentHeight > 0 ? juce::jmin (contentHeight, getHeight()) : getHeight());
-    const auto row = juce::Rectangle<float> (13.0f, 0.0f, (float) getWidth() - 26.0f, drawnHeight)
-                         .withSizeKeepingCentre ((float) getWidth() - 26.0f, juce::jmin (24.0f, drawnHeight - 6.0f));
+    const auto unit = drawnHeight / (float) Layout::tabBarHeight;
+    const auto row = juce::Rectangle<float> (10.0f, 2.0f * unit, (float) getWidth() - 20.0f,
+                                             juce::jmin (30.0f * unit, drawnHeight - 4.0f * unit));
 
     const auto width = (row.getWidth() - gap * (float) (tabs.size() - 1)) / (float) tabs.size();
 
@@ -92,7 +96,7 @@ void TabBar::paint (juce::Graphics& g)
     // buttons is where the editor writes its footer line.
     const auto& t = theme();
 
-    g.setFont (t.tabFont());
+    const auto digitFont = Theme::numberFont (8.5f);
 
     for (int i = 0; i < tabs.size(); ++i)
     {
@@ -100,8 +104,21 @@ void TabBar::paint (juce::Graphics& g)
         const auto active = i == selectedIndex;
         const auto hovered = ! active && i == hoverIndex;
 
-        g.setColour (active ? t.accent : (hovered ? t.buttonHover : t.button));
-        g.fillRoundedRectangle (area, 5.0f);
+        Surfaces::button (g, t, area, active ? t.accent : (hovered ? t.buttonHover : t.button), active);
+
+        // The key that opens the page, small and quiet at the left, so the
+        // shortcuts are discoverable without a manual. Dropped when the tab is
+        // too narrow to keep it clear of the name.
+        g.setFont (t.tabFont());
+        const auto nameWidth = juce::GlyphArrangement::getStringWidth (t.tabFont(), tabs[i]);
+
+        if (area.getWidth() - nameWidth >= 40.0f)
+        {
+            g.setFont (digitFont);
+            g.setColour (active ? t.onAccent.withAlpha (0.55f) : t.label);
+            g.drawText (juce::String (i + 1), area.withTrimmedLeft (9.0f), juce::Justification::centredLeft, false);
+            g.setFont (t.tabFont());
+        }
 
         g.setColour (active ? t.onAccent : t.text);
         g.drawText (tabs[i], area, juce::Justification::centred, false);

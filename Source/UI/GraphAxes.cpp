@@ -4,6 +4,8 @@
 //
 
 #include "GraphAxes.h"
+#include "Surfaces.h"
+#include "../TextUtf8.h"
 
 #include <cmath>
 #include <utility>
@@ -57,16 +59,27 @@ float yToDecibels (float y, juce::Rectangle<float> plot, float topDb, float bott
 //==============================================================================
 void paintDisplay (juce::Graphics& g, const Theme& theme, juce::Rectangle<float> area)
 {
-    g.setColour (theme.bed);
-    g.fillRoundedRectangle (area, 6.0f);
+    Surfaces::recessed (g, theme, area, 6.0f);
 }
 
-juce::Rectangle<float> plotInDisplay (juce::Rectangle<float> display)
+juce::Rectangle<float> plotInDisplay (juce::Rectangle<float> display, bool withToolbar)
 {
+    // The 0.4.0 design: 10 points of padding inside the display and a 40
+    // point column of dB labels on the left, 12 on the right plus room for the
+    // last frequency label's overhang; with a toolbar, its 24 point row and 4
+    // under it, then 6 more so the top label is not cut by the row.
     return display.withTrimmedLeft ((float) Layout::axisGutterLeft)
                   .withTrimmedBottom ((float) Layout::axisGutterBottom)
+                  .withTrimmedTop (withToolbar ? 10.0f + (float) Layout::graphToolbarHeight + 10.0f : 14.0f)
+                  .withTrimmedRight (18.0f);
+}
+
+juce::Rectangle<float> toolbarInDisplay (juce::Rectangle<float> display)
+{
+    return display.withTrimmedLeft ((float) Layout::axisGutterLeft)
+                  .withTrimmedRight (12.0f)
                   .withTrimmedTop (10.0f)
-                  .withTrimmedRight (14.0f);
+                  .withHeight ((float) Layout::graphToolbarHeight);
 }
 
 void paintBed (juce::Graphics& g, const Theme& theme, juce::Rectangle<float> plot)
@@ -76,6 +89,36 @@ void paintBed (juce::Graphics& g, const Theme& theme, juce::Rectangle<float> plo
 }
 
 //==============================================================================
+namespace
+{
+    /** An axis label: the unit only at the two ends ("20 Hz" ... "1k" ...
+        "20 kHz"), since a row of ten "Hz" says nothing the first one did not.
+        The readouts keep formatFrequency, where the unit belongs on every
+        number. */
+    juce::String axisFrequency (float hz, bool withUnit)
+    {
+        if (withUnit)
+            return formatFrequency (hz);
+
+        if (hz >= 1000.0f)
+        {
+            const auto thousands = std::round (hz / 100.0f) / 10.0f;
+
+            return (std::abs (thousands - std::round (thousands)) < 0.05f
+                        ? juce::String (juce::roundToInt (thousands))
+                        : juce::String (thousands, 1)) + "k";
+        }
+
+        return juce::String (hz, hz < 10.0f ? 1 : 0);
+    }
+
+    bool isDecade (float hz)
+    {
+        const auto exponent = std::log10 (hz);
+        return std::abs (exponent - std::round (exponent)) < 1.0e-4f;
+    }
+}
+
 juce::String formatFrequency (float hz)
 {
     if (hz >= 10000.0f)
@@ -182,17 +225,31 @@ void paintFrequencyGrid (juce::Graphics& g, const Theme& theme,
     // three quarters of the room for the same number of labels.
     float lastLabelRight = -1.0e9f;
 
+    // The first and the last label carry the unit, the ones between do not.
+    float firstLabelled = -1.0f, lastLabelled = -1.0f;
+
+    for (const auto& [hz, labelled] : ticks)
+        if (labelled)
+        {
+            if (firstLabelled < 0.0f)
+                firstLabelled = hz;
+
+            lastLabelled = hz;
+        }
+
     for (const auto& [hz, labelled] : ticks)
     {
         const auto x = frequencyToX (hz, plot, minHz, maxHz, logarithmic);
 
-        g.setColour (labelled ? theme.grid : theme.gridMinor());
+        // Three steps: the decades, the labelled lines, the rest.
+        g.setColour (logarithmic && isDecade (hz) ? theme.gridMajor()
+                                                  : labelled ? theme.grid : theme.gridMinor());
         g.fillRect (x, plot.getY(), 1.0f, plot.getHeight());
 
         if (! labelled || labelStrip.isEmpty())
             continue;
 
-        const auto text  = formatFrequency (hz);
+        const auto text  = axisFrequency (hz, hz == firstLabelled || hz == lastLabelled);
         const auto width = juce::GlyphArrangement::getStringWidth (theme.axisFont(), text) + 8.0f;
 
         // Centred on the line, then pulled back inside the strip at the two
@@ -229,14 +286,18 @@ void paintDecibelGrid (juce::Graphics& g, const Theme& theme,
         // against, so it is drawn as an axis rather than as one more gridline.
         const auto isZero = std::abs (db) < 0.001f;
 
-        g.setColour (isZero ? theme.grid.brighter (0.25f) : theme.gridMinor());
+        g.setColour (isZero ? theme.gridMajor() : theme.grid);
         g.fillRect (plot.getX(), y, plot.getWidth(), 1.0f);
 
         if (! labelStrip.isEmpty())
         {
             g.setColour (theme.bedDim);
 
-            const auto text = (db > 0.0f ? "+" : "") + juce::String (juce::roundToInt (db)) + " dB";
+            // A real minus sign, as wide as the plus. The unit is written once,
+            // below (0.4.0), rather than after the top number.
+            const auto rounded = juce::roundToInt (db);
+            const auto text = (rounded > 0 ? juce::String ("+") : rounded < 0 ? utf8 ("\xe2\x88\x92") : juce::String())
+                              + juce::String (std::abs (rounded));
 
             auto area = juce::Rectangle<float> (labelStrip.getWidth(), theme.axisSize + 6.0f)
                             .withCentre ({ labelStrip.getCentreX(), y });
@@ -245,6 +306,15 @@ void paintDecibelGrid (juce::Graphics& g, const Theme& theme,
 
             g.drawText (text, area, juce::Justification::centredRight, false);
         }
+    }
+
+    // "dB" in the corner under the labels, on the frequency labels' line.
+    if (! labelStrip.isEmpty())
+    {
+        g.setColour (theme.bedDim.withMultipliedAlpha (0.7f));
+        g.drawText ("dB", juce::Rectangle<float> (labelStrip.getX(), plot.getBottom() + 2.0f,
+                                                  labelStrip.getWidth(), (float) Layout::axisGutterBottom - 6.0f),
+                    juce::Justification::centredRight, false);
     }
 }
 
@@ -262,7 +332,7 @@ void paintDivisionGrid (juce::Graphics& g, const Theme& theme,
         const auto y = plot.getY() + plot.getHeight() * (float) i / (float) rows;
         const auto middle = rows % 2 == 0 && i == rows / 2;
 
-        g.setColour (middle ? theme.grid.brighter (0.25f) : theme.gridMinor());
+        g.setColour (middle ? theme.gridMajor() : theme.gridMinor());
         g.fillRect (plot.getX(), y, plot.getWidth(), 1.0f);
     }
 }

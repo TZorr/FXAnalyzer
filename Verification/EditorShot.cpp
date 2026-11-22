@@ -424,9 +424,10 @@ int main (int argc, char** argv)
         // are compared by colour distance, CIE76 delta E in Lab, and the text on
         // them by WCAG contrast, which is the right measure for type. Both
         // panels, light and dark, are held to the same floors.
+        for (int colourway = 0; colourway < Theme::numColourways; ++colourway)
         for (const bool dark : { false, true })
         {
-            const auto t = Theme::make (dark);
+            const auto t = Theme::make ((Theme::Colourway) colourway, dark);
 
             const auto selectedFill = colourDistance (t.accent, t.button);
             const auto hoverFill    = colourDistance (t.buttonHover, t.button);
@@ -445,9 +446,9 @@ int main (int argc, char** argv)
 
             char detail[240];
             std::snprintf (detail, sizeof (detail),
-                           "%s  fills dE: selected:rest %.1f  hover:rest %.1f  selected:hover %.1f   "
+                           "%-6s %s  fills dE: selected:rest %.1f  hover:rest %.1f  selected:hover %.1f   "
                            "type: on lit %.2f  on rest %.2f  on hover %.2f",
-                           dark ? "dark: " : "light:",
+                           Theme::colourwayName ((Theme::Colourway) colourway), dark ? "dark: " : "light:",
                            selectedFill, hoverFill, hoverApart, litText, restText, hoverText);
 
             std::printf ("  %s  %s\n", ok ? "PASS" : "FAIL", detail);

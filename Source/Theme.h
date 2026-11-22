@@ -27,6 +27,13 @@
 //  dark values: the layout, the orange and the traces stay, the greys turn
 //  round. The choice is the user's, not the session's (see PluginEditor.cpp).
 //
+//  Since 0.4.0 there are four colourways - Orange (the original), Blue, Mint
+//  and Red - each light and dark, chosen under MENU > Colour and saved like
+//  Dark. The values are in Theme.cpp, one row per panel; the light orange one
+//  is still the defaults below. Two of the defaults moved for contrast at
+//  9.5 px: label (3.5:1 -> 4.7:1 on the body) and bedDim (3.1:1 -> 4.7:1 on a
+//  bed). EditorShot holds all eight panels to the same floors.
+//
 
 #pragma once
 
@@ -40,7 +47,7 @@ struct Theme
     juce::Colour background  { 0xffd4d0c7 };   // the panel body
     juce::Colour section     { 0xffc7c2b8 };   // recessed sections (the Settings groups)
     juce::Colour text        { 0xff2e2b27 };   // ink: values and titles on the body
-    juce::Colour label       { 0xff6f6a61 };   // names of controls on the body
+    juce::Colour label       { 0xff5a5650 };   // names of controls on the body
 
     //==============================================================================
     // Controls.
@@ -61,10 +68,11 @@ struct Theme
     juce::Colour curve       { 0xffff8c2b };   // the spectrum, the scope trace, the bars
     juce::Colour curveAlt    { 0xffe9e5dd };   // second trace: right channel, side, peak hold
     juce::Colour bedText     { 0xffff8c2b };   // readouts on a bed
-    juce::Colour bedDim      { 0xff8f5f33 };   // axis labels and captions on a bed
+    juce::Colour bedDim      { 0xffb37c46 };   // axis labels and captions on a bed
     juce::Colour bedButton   { 0xff3a3631 };   // a button that sits on a bed
     juce::Colour bedButtonHover { 0xff4a453f };
     juce::Colour warning     { 0xffe04a4f };   // over the true-peak ceiling, correlation below zero
+    juce::Colour below       { 0xff4fb3d1 };   // TARGET: under the curve (too quiet), as on Clearbox
 
     /** How strongly each derived colour is drawn, as a share of its base's
         alpha. Named rather than written inline, because each is a choice with a
@@ -79,39 +87,53 @@ struct Theme
     juce::Colour dimText()   const { return label; }
     juce::Colour accentDim() const { return accent.withMultipliedAlpha (accentDimAlpha); }
 
+    /** The light and shade that make the panel read as an object (Surfaces.h).
+        Derived, not stored: a dark body needs far less light on its edges and
+        far more shade under them than a light one, and that follows from the
+        body's own brightness for every panel. */
+    bool isDarkBody() const { return background.getPerceivedBrightness() < 0.5f; }
+    juce::Colour bevelLight()   const { return juce::Colours::white.withAlpha (isDarkBody() ? 0.05f : 0.45f); }
+    juce::Colour bevelShade()   const { return juce::Colours::black.withAlpha (isDarkBody() ? 0.55f : 0.16f); }
+    juce::Colour innerShadow()  const { return juce::Colours::black.withAlpha (0.45f); }
+    juce::Colour bedHighlight() const { return juce::Colours::white.withAlpha (0.06f); }
+    juce::Colour litHighlight() const { return juce::Colours::white.withAlpha (0.35f); }
+    juce::Colour accentGlow()   const { return accent.withAlpha (0.35f); }
+
+    /** Grid steps on a bed: the decades (100 Hz, 1 kHz, 10 kHz) and the 0 dB
+        line over the labelled lines over the rest. */
+    juce::Colour gridMajor() const { return grid.brighter (0.3f); }
+
     //==============================================================================
-    /** The light panel (the defaults above) or the dark one. */
-    static Theme make (bool dark)
+    /** The colourways (since 0.4.0). Each comes light and dark; the Dark
+        button picks which, the Colour submenu of MENU picks the family. The
+        order is the order of the menu and of the saved setting - append, never
+        reorder. Orange is the original Kitbox/Rackbox panel. */
+    enum class Colourway { orange, blue, mint, red };
+    static constexpr int numColourways = 4;
+
+    static const char* colourwayName (Colourway c)
     {
-        Theme t;
-
-        if (! dark)
-            return t;
-
-        t.background     = juce::Colour (0xff161513);
-        t.section        = juce::Colour (0xff22201d);
-        t.text           = juce::Colour (0xffece7de);
-        t.label          = juce::Colour (0xff9d978d);
-
-        t.onAccent       = juce::Colour (0xff2c2a27);
-        t.button         = juce::Colour (0xff2f2c28);
-        t.buttonHover    = juce::Colour (0xff3a3631);
-        t.knobFace       = juce::Colour (0xff36332e);
-        t.knobEdge       = juce::Colour (0xff55504a);
-        t.knobTrack      = juce::Colour (0xff3f3b36);
-
-        // The beds go a step darker, as on Kitbox, so they still read as
-        // recessed in a near-black body; the grid keeps its step above them.
-        t.bed            = juce::Colour (0xff0c0b0a);
-        t.grid           = juce::Colour (0xff2a2622);
-        t.bedDim         = juce::Colour (0xffa87043);
-        return t;
+        switch (c)
+        {
+            case Colourway::blue: return "Blue";
+            case Colourway::mint: return "Mint";
+            case Colourway::red:  return "Red";
+            case Colourway::orange:
+            default:              return "Orange";
+        }
     }
 
-    /** Which of the two every open FX Analyzer window shows. Process-wide, as
-        on Kitbox: a switch in one window reaches the others on their next
+    /** One of the eight panels: a colourway, light or dark. */
+    static Theme make (Colourway colourway, bool dark);
+
+    /** The original orange panel, light or dark. */
+    static Theme make (bool dark) { return make (Colourway::orange, dark); }
+
+    /** Which panel every open FX Analyzer window shows. Process-wide, as on
+        Kitbox: a switch in one window reaches the others on their next
         frame. */
     static inline bool darkPanel = false;
+    static inline Colourway colourway = Colourway::orange;
 
     //==============================================================================
     /** The panel's type: Kitbox's two faces. Names are set bold, upper case and
@@ -125,13 +147,20 @@ struct Theme
     float valueSize  = 10.5f;
 
     juce::Font labelFont() const { return labelFontAt (labelSize); }
-    juce::Font tabFont()   const { return labelFontAt (tabSize); }
+    juce::Font tabFont()   const { return capsFontAt (tabSize); }
     juce::Font axisFont()  const { return numberFont (axisSize); }
     juce::Font valueFont() const { return numberFont (valueSize); }
 
     static juce::Font labelFontAt (float height)
     {
         return juce::Font (juce::FontOptions (height, juce::Font::bold)).withExtraKerningFactor (0.08f);
+    }
+
+    /** The design's small capitals (0.4.0): bold and tracked wide, 0.14 em -
+        the tabs, the header's buttons and small print, the buttons on a bed. */
+    static juce::Font capsFontAt (float height)
+    {
+        return juce::Font (juce::FontOptions (height, juce::Font::bold)).withExtraKerningFactor (0.14f);
     }
 
     static juce::Font numberFont (float height, bool bold = false)

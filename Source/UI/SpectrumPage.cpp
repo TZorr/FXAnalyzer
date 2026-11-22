@@ -5,6 +5,7 @@
 
 #include "SpectrumPage.h"
 #include "../PluginProcessor.h"
+#include "../TextUtf8.h"
 
 #include <cmath>
 
@@ -19,6 +20,9 @@ SpectrumPage::SpectrumPage (FXAnalyzerProcessor& processor) : PageBase (processo
     addAndMakeVisible (cursorButton);
     addAndMakeVisible (bassButton);
     addAndMakeVisible (freezeButton);
+
+    for (auto* button : { &cursorButton, &bassButton, &freezeButton })
+        button->setShowsLamp (true);
 
     cursorButton.setTooltip ("Read frequency and level under the pointer."
                             " The level is time-smoothed, so Reactivity decides how still it stands");
@@ -174,32 +178,37 @@ juce::Rectangle<float> SpectrumPage::displayArea() const
 
 juce::Rectangle<float> SpectrumPage::plotArea() const
 {
-    return GraphAxes::plotInDisplay (displayArea());
+    // The preview on the Settings page has no buttons, so no toolbar row.
+    return GraphAxes::plotInDisplay (displayArea(), ! embedded);
 }
 
 void SpectrumPage::resized()
 {
-    const auto plot = plotArea().toNearestInt();
+    // The toolbar row above the plot (0.4.0): the measurement's terms on the
+    // left, then the channel as one segmented control on a dark tray, and the
+    // three toggles with their lamps on the right - these choose what is
+    // measured, those how it is looked at.
+    const auto toolbar = GraphAxes::toolbarInDisplay (displayArea()).toNearestInt();
+    const int height = toolbar.getHeight(), gap = 8;
 
-    // Three small word buttons in the plot's top right corner, over the graph
-    // - in the band at the top where the spectrum is rarely drawn.
-    const int width = 58, height = 20, gap = 6;
+    auto row = toolbar;
 
-    freezeButton.setBounds (plot.getRight() - width,                 plot.getY() + 2, width, height);
-    bassButton.setBounds   (plot.getRight() - 2 * width - gap,       plot.getY() + 2, width, height);
-    cursorButton.setBounds (plot.getRight() - 3 * width - 2 * gap,   plot.getY() + 2, width, height);
-
-    // The channel buttons to the left of those, a wider gap between the two
-    // groups: these choose what is measured, the three on the right how it is
-    // looked at.
-    const int groupGap = 16;
-    const int channelWidth = 44;
-
-    for (size_t i = 0; i < channelButtons.size(); ++i)
+    for (auto* button : { &freezeButton, &bassButton, &cursorButton })
     {
-        const auto fromRight = (int) (channelButtons.size() - i);
-        channelButtons[i].setBounds (cursorButton.getX() - groupGap - fromRight * channelWidth - (fromRight - 1) * gap,
-                                     plot.getY() + 2, channelWidth, height);
+        button->setBounds (row.removeFromRight (button->getIdealWidth()).withSizeKeepingCentre (button->getIdealWidth(), height));
+        row.removeFromRight (gap);
+    }
+
+    row.removeFromRight (4);
+
+    // The segments are 46 by 20, two apart, on a tray 2 points larger all round.
+    const int channelWidth = 46, segmentHeight = 20, segmentGap = 2;
+    row.removeFromRight (2);
+
+    for (size_t i = channelButtons.size(); i-- > 0;)
+    {
+        channelButtons[i].setBounds (row.removeFromRight (channelWidth).withSizeKeepingCentre (channelWidth, segmentHeight));
+        row.removeFromRight (segmentGap);
     }
 
     sonogramValid = false;
@@ -395,6 +404,15 @@ void SpectrumPage::paint (juce::Graphics& g)
     GraphAxes::paintDisplay (g, t, displayArea());
     GraphAxes::paintBed (g, t, plot);
 
+    // The tray under the channel segments (the buttons paint over it).
+    if (channelButtons[0].isVisible())
+    {
+        const auto tray = channelButtons.front().getBounds().getUnion (channelButtons.back().getBounds())
+                              .toFloat().expanded (2.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.33f));
+        g.fillRoundedRectangle (tray, 4.0f);
+    }
+
     auto dbStrip = juce::Rectangle<float> (plot.getX() - (float) Layout::axisGutterLeft,
                                            plot.getY(),
                                            (float) Layout::axisGutterLeft - 8.0f,
@@ -440,8 +458,10 @@ void SpectrumPage::paint (juce::Graphics& g)
     const auto& finest   = analysis.getTierAnalyser (analysis.getNumTiers() - 1);
     const auto resolution = finest.getSampleRate() / (double) finest.getFftSize();
 
-    auto info = analysis.describeTiers() + "  "
-                    + juce::String (resolution, 2) + " Hz/bin at the bottom  "
+    const auto dot = utf8 (" \xc2\xb7 ");
+
+    auto info = analysis.describeTiers() + dot
+                    + juce::String (resolution, 2) + " Hz/bin at the bottom" + dot
                     + juce::String (finest.getSampleRate() / 1000.0, 1) + " kHz";
 
     // With the zoom on, say what the band actually contains. The question the
@@ -463,7 +483,7 @@ void SpectrumPage::paint (juce::Graphics& g)
             ? juce::String (windowMs / 1000.0f, 2) + " s window"
             : juce::String (juce::roundToInt (windowMs)) + " ms window";
 
-        info += "   " + GraphAxes::formatFrequency (juce::jmax (0.0f, viewMinHz))
+        info += dot + GraphAxes::formatFrequency (juce::jmax (0.0f, viewMinHz))
                       + juce::String ("-") + GraphAxes::formatFrequency (viewMaxHz)
                       + "  " + juce::String (binsInBand) + " bins  " + windowText;
     }
@@ -487,12 +507,22 @@ void SpectrumPage::paint (juce::Graphics& g)
     // Up to the leftmost button and no further, and onto a second line when it
     // does not fit: with the bass band on the end and six buttons beside it the
     // line is longer than the room, and a cut-off "1." says less than nothing.
-    const auto infoWidth = embedded ? plot.getWidth() - 16.0f
-                                    : juce::jmax (200.0f, (float) channelButtons[0].getX() - plot.getX() - 16.0f);
+    // In the toolbar row on the page; over the plot's top left in the preview,
+    // which has no toolbar.
+    const auto infoText = suppressed ? info + dot + "Multi needs Bands (not Off)" : info;
 
-    g.drawFittedText (suppressed ? info + "   Multi needs Bands (not Off)" : info,
-                      juce::Rectangle<float> (plot.getX() + 8.0f, plot.getY() + 6.0f, infoWidth, 28.0f).toNearestInt(),
-                      juce::Justification::topLeft, 2, 1.0f);
+    if (embedded)
+        g.drawFittedText (infoText,
+                          juce::Rectangle<float> (plot.getX() + 8.0f, plot.getY() + 6.0f, plot.getWidth() - 16.0f, 28.0f).toNearestInt(),
+                          juce::Justification::topLeft, 2, 1.0f);
+    else
+    {
+        const auto toolbar = GraphAxes::toolbarInDisplay (displayArea());
+        const auto infoWidth = juce::jmax (120.0f, (float) channelButtons[0].getX() - 2.0f - toolbar.getX() - 12.0f);
+
+        g.drawFittedText (infoText, toolbar.withWidth (infoWidth).toNearestInt(),
+                          juce::Justification::centredLeft, 2, 0.9f);
+    }
 
     if (cursorButton.getToggleState() && cursorInside && ! embedded)
         paintCursorReadout (g);
@@ -531,7 +561,10 @@ void SpectrumPage::paintCurve (juce::Graphics& g) const
     fill.lineTo (plot.getX() + (float) (columnDb.size() - 1), plot.getBottom());
     fill.closeSubPath();
 
-    g.setColour (t.curveFill());
+    // The fill fades towards the floor: the level is where the line is, and
+    // the area under it only has to say which side is "signal".
+    g.setGradientFill (juce::ColourGradient (t.curve.withMultipliedAlpha (0.34f), 0.0f, plot.getY(),
+                                             t.curve.withMultipliedAlpha (0.10f), 0.0f, plot.getBottom(), false));
     g.fillPath (fill);
 
     g.setColour (t.curve);
@@ -554,7 +587,7 @@ void SpectrumPage::paintCurve (juce::Graphics& g) const
             peak.lineTo (px, py);
     }
 
-    g.setColour (t.curveAlt.withAlpha (0.75f));
+    g.setColour (t.curveAlt.withAlpha (0.55f));
     g.strokePath (peak, juce::PathStrokeType (1.0f));
 }
 

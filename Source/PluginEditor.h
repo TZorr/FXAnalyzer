@@ -34,6 +34,7 @@
 #include "UI/SettingsPage.h"
 #include "UI/SpectrumPage.h"
 #include "UI/StereoPage.h"
+#include "UI/TargetPage.h"
 #include "UI/TabBar.h"
 
 class FXAnalyzerEditor : public juce::AudioProcessorEditor,
@@ -117,6 +118,9 @@ private:
 
     /** Light or dark panel, saved for the user (not the session). */
     void setDarkMode (bool shouldBeDark);
+
+    /** The colour family (MENU > Colour), saved for the user like Dark. */
+    void setColourway (Theme::Colourway);
     void unmuteStandaloneInput();
     void showMenu();
     void showPresetMenu();
@@ -186,14 +190,16 @@ private:
     LoudnessPage loudnessPage;
     StereoPage   stereoPage;
     PitchPage    pitchPage;
+    TargetPage   targetPage;
     SettingsPage settingsPage;
 
     std::array<PageBase*, FXParams::numPages> pages;
 
-    /** The light panel or the dark one (Theme::make); swapped whole by
-        setDarkMode and handed down again by applyTheme. */
+    /** The panel (Theme::make: colourway, light or dark); swapped whole by
+        setDarkMode or setColourway and handed down again by applyTheme. */
     Theme theme;
     bool shownDark = false;
+    Theme::Colourway shownColourway = Theme::Colourway::orange;
 
     /** The footer line, in the tab strip's click-dead band at the bottom. */
     juce::Rectangle<int> footerArea;

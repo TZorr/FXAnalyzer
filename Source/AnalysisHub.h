@@ -45,6 +45,7 @@
 #include "SpectrumAnalyser.h"
 #include "StereoAnalyser.h"
 #include "TruePeakMeter.h"
+#include "Target/ClearEngine.h"
 
 class AnalysisHub
 {
@@ -70,7 +71,11 @@ public:
     /** Which page is on screen. Only the pitch detector cares, and it cares a
         great deal: it is the one analyser expensive enough that running it
         unwatched would show up in a host's CPU meter. */
-    void setActivePage (FXParams::Page p) noexcept { activePage = p; }
+    void setActivePage (FXParams::Page p) noexcept
+    {
+        activePage = p;
+        targetRunning.store (p == FXParams::Page::target, std::memory_order_relaxed);
+    }
 
     /** Message thread only - it reallocates the transform. */
     void setFftOrder (int order);
@@ -151,6 +156,12 @@ public:
     const CaptureRing&      getRing()     const noexcept { return ring; }
 
     PitchDetector::Result getPitch() const noexcept { return pitch.getResult(); }
+
+    /** Clearbox's measurement for the TARGET page: the input against the 4.5 dB/oct
+        curve. It runs on the audio thread, and only while that page is the one on
+        screen - read only its display getters, which are atomics. */
+    const ClearEngine& getTarget() const noexcept { return target; }
+    bool isTargetRunning() const noexcept { return targetRunning.load (std::memory_order_relaxed); }
 
     /** How many FFT frames the shortest tier has analysed since prepare().
         Exposed so that AnalyzerCheck can assert the overlap is really 75%
@@ -320,6 +331,14 @@ private:
     LoudnessMeter    loudness;
     TruePeakMeter    truePeak;
     PitchDetector    pitch;
+
+    // Clearbox's engine, measuring only (Settings{}), fed copies so the host's
+    // buffer is never touched. Reset by the audio thread itself when the page
+    // comes on, so the two threads never reset and process it at once.
+    ClearEngine        target;
+    std::vector<float> targetLeft, targetRight;
+    std::atomic<bool>  targetRunning { false };
+    bool               targetWasRunning = false;
 
     double lastUpdateMs   = 0.0;
     int    pitchFrameFlip = 0;

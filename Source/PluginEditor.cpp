@@ -38,7 +38,13 @@ namespace
         return std::make_unique<juce::PropertiesFile> (options);
     }
 
-    constexpr const char* darkModeKey = "darkMode";
+    constexpr const char* darkModeKey  = "darkMode";
+    constexpr const char* colourwayKey = "colourway";   // Theme::Colourway as an int
+
+    Theme::Colourway colourwayFromInt (int value)
+    {
+        return (Theme::Colourway) juce::jlimit (0, Theme::numColourways - 1, value);
+    }
 }
 
 //==============================================================================
@@ -53,9 +59,10 @@ FXAnalyzerEditor::FXAnalyzerEditor (FXAnalyzerProcessor& processorToUse)
       loudnessPage (processorToUse),
       stereoPage (processorToUse),
       pitchPage (processorToUse),
+      targetPage (processorToUse),
       settingsPage (processorToUse)
 {
-    pages = { &spectrumPage, &scopePage, &loudnessPage, &stereoPage, &pitchPage, &settingsPage };
+    pages = { &spectrumPage, &scopePage, &loudnessPage, &stereoPage, &pitchPage, &targetPage, &settingsPage };
 
     addAndMakeVisible (header);
     addAndMakeVisible (tabs);
@@ -87,9 +94,14 @@ FXAnalyzerEditor::FXAnalyzerEditor (FXAnalyzerProcessor& processorToUse)
     plugin.addChangeListener (this);
 
     // The saved theme first, so the first paint is already the right one.
-    Theme::darkPanel = openSettings()->getBoolValue (darkModeKey, false);
+    {
+        auto settings = openSettings();
+        Theme::darkPanel = settings->getBoolValue (darkModeKey, false);
+        Theme::colourway = colourwayFromInt (settings->getIntValue (colourwayKey, 0));
+    }
     shownDark = Theme::darkPanel;
-    theme = Theme::make (shownDark);
+    shownColourway = Theme::colourway;
+    theme = Theme::make (shownColourway, shownDark);
     header.setDarkLit (shownDark);
 
     applyTheme();
@@ -272,8 +284,25 @@ void FXAnalyzerEditor::setDarkMode (bool shouldBeDark)
     record (shouldBeDark ? "panel dark" : "panel light");
 
     shownDark = shouldBeDark;
-    theme = Theme::make (shouldBeDark);
+    theme = Theme::make (shownColourway, shouldBeDark);
     header.setDarkLit (shouldBeDark);
+    applyTheme();
+}
+
+void FXAnalyzerEditor::setColourway (Theme::Colourway newColourway)
+{
+    Theme::colourway = newColourway;
+
+    if (auto settings = openSettings())
+    {
+        settings->setValue (colourwayKey, (int) newColourway);
+        settings->saveIfNeeded();
+    }
+
+    record (juce::String ("colourway ") + Theme::colourwayName (newColourway));
+
+    shownColourway = newColourway;
+    theme = Theme::make (newColourway, shownDark);
     applyTheme();
 }
 
@@ -316,12 +345,13 @@ void FXAnalyzerEditor::selectPage (int index, const char* reason)
     // What each page is for, in one line under its name in the header display.
     static const char* const descriptions[FXParams::numPages]
     {
-        "Level over frequency. Every setting is on the Settings page",
-        "The waveform over time, left in orange and right in cream",
-        "EBU R128 loudness to BS.1770-4, and true peak",
-        "Goniometer, correlation, balance and width",
-        "The note being played, and how far off it is",
-        "Every display setting, over a live preview of the spectrum"
+        "Level over frequency. Every setting is on the Settings page.",
+        "The waveform over time, left and right as two traces.",
+        "EBU R128 loudness to BS.1770-4, and true peak.",
+        "Goniometer, correlation, balance and width.",
+        "The note being played, and how far off it is.",
+        "How far the spectrum is from Clearbox's 4.5 dB/oct curve, per octave.",
+        "Every display setting, over a live preview of the spectrum."
     };
 
     header.setPage (FXParams::pageNames[clamped], descriptions[clamped]);
@@ -350,12 +380,58 @@ void FXAnalyzerEditor::paint (juce::Graphics& g)
     // The footer line, in the band along the bottom edge where Logic does not
     // reliably deliver a click (Layout::tabBarSafeBottom): a place nothing can
     // be operated in is a place for text that is only read.
-    g.setColour (theme.label);
-    g.setFont (Theme::labelFontAt (9.0f));
-    g.drawText (utf8 ("FX ANALYZER " JucePlugin_VersionString
-                      "   \xc2\xb7   NEVER WRITES TO THE SIGNAL   \xc2\xb7   INPUT GAIN SCALES ONLY WHAT IS MEASURED"
-                      "   \xc2\xb7   F FREEZES, R RESETS THE METERS"),
-                footerArea, juce::Justification::centredLeft, true);
+    // The claims on the left, between small dots; the two keys on the right
+    // drawn as keycaps.
+    const auto font = Theme::capsFontAt (8.0f);
+    auto line = footerArea.toFloat();
+
+    {
+        const auto keyFont = Theme::numberFont (7.5f, true);
+        const auto key = [&] (const juce::String& cap, const juce::String& word)
+        {
+            const auto wordWidth = juce::GlyphArrangement::getStringWidth (font, word) + 2.0f;
+            g.setColour (theme.label);
+            g.setFont (font);
+            g.drawText (word, line.removeFromRight (wordWidth), juce::Justification::centredRight, false);
+
+            line.removeFromRight (5.0f);
+            const auto box = line.removeFromRight (11.0f).withSizeKeepingCentre (11.0f, 12.0f);
+            g.drawRoundedRectangle (box.reduced (0.5f), 2.0f, 1.0f);
+            g.setFont (keyFont);
+            g.drawText (cap, box, juce::Justification::centred, false);
+            line.removeFromRight (10.0f);
+        };
+
+        key ("R", "RESET");
+        key ("F", "FREEZE");
+    }
+
+    g.setFont (font);
+    g.setColour (theme.text.withAlpha (0.8f));
+
+    const juce::StringArray claims { juce::String ("FX ANALYZER " JucePlugin_VersionString),
+                                     "NEVER WRITES TO THE SIGNAL",
+                                     "INPUT GAIN SCALES ONLY WHAT IS MEASURED" };
+
+    for (int i = 0; i < claims.size() && line.getWidth() > 0.0f; ++i)
+    {
+        if (i > 0)
+        {
+            line.removeFromLeft (10.0f);
+            g.setColour (theme.label.withMultipliedAlpha (0.6f));
+            g.fillEllipse (line.removeFromLeft (3.0f).withSizeKeepingCentre (3.0f, 3.0f));
+            line.removeFromLeft (10.0f);
+            g.setColour (theme.label);
+        }
+
+        const auto width = juce::GlyphArrangement::getStringWidth (font, claims[i]) + 2.0f;
+
+        // A claim that does not fit whole is left out rather than cut short.
+        if (width > line.getWidth())
+            break;
+
+        g.drawText (claims[i], line.removeFromLeft (width), juce::Justification::centredLeft, false);
+    }
 }
 
 void FXAnalyzerEditor::resized()
@@ -381,8 +457,10 @@ void FXAnalyzerEditor::resized()
     tabs.setBounds (area.removeFromBottom (stripHeight));
     tabs.setContentHeight (stripHeight - safeBottom);
 
-    footerArea = tabs.getBounds().removeFromBottom (safeBottom).withTrimmedLeft (13).withTrimmedRight (13)
-                     .withTrimmedBottom (3);
+    // The footer's line, 14 points from the window's left (2 inset + 12) and
+    // clear of the resize grip on the right.
+    footerArea = tabs.getBounds().removeFromBottom (safeBottom).withTrimmedLeft (12).withTrimmedRight (22)
+                     .withTrimmedBottom (4);
 
 
     for (auto* page : pages)
@@ -400,10 +478,11 @@ void FXAnalyzerEditor::advanceOneFrame()
     ++frameCount;
 
     // Another FX Analyzer window may have switched the theme: it is process-wide.
-    if (shownDark != Theme::darkPanel)
+    if (shownDark != Theme::darkPanel || shownColourway != Theme::colourway)
     {
         shownDark = Theme::darkPanel;
-        theme = Theme::make (shownDark);
+        shownColourway = Theme::colourway;
+        theme = Theme::make (shownColourway, shownDark);
         header.setDarkLit (shownDark);
         applyTheme();
     }
@@ -425,8 +504,8 @@ void FXAnalyzerEditor::advanceOneFrame()
     const auto channel = juce::jlimit (0, FXParams::channelNames.size() - 1,
                                        plugin.getChoiceParameter (FXParams::channel));
 
-    header.setStatus (juce::String (plugin.getAnalysis().getSampleRate() / 1000.0, 1) + " kHz  "
-                          + utf8 ("\xc2\xb7") + "  " + FXParams::channelNames[channel],
+    header.setStatus ({ juce::String (plugin.getAnalysis().getSampleRate() / 1000.0, 1) + " kHz",
+                        FXParams::channelNames[channel].removeCharacters (" ").toUpperCase() },
                       plugin.getBoolParameter (FXParams::freeze));
 }
 
@@ -435,7 +514,7 @@ bool FXAnalyzerEditor::keyPressed (const juce::KeyPress& key)
 {
     const auto character = key.getTextCharacter();
 
-    if (character >= '1' && character <= '6')
+    if (character >= '1' && character < '1' + FXParams::numPages)
     {
         selectPage (character - '1', "key");
         return true;
@@ -461,9 +540,25 @@ void FXAnalyzerEditor::showMenu()
 {
     juce::PopupMenu menu;
 
-    menu.addItem (200, "Reset Meters");
-    menu.addItem (201, "Save Diagnostics...");
+    // The panel's look: the colour family, and light or dark (the same switch
+    // as the Dark button). Saved for the user, not the session.
+    juce::PopupMenu colours;
+
+    for (int i = 0; i < Theme::numColourways; ++i)
+    {
+        const auto c = (Theme::Colourway) i;
+        colours.addItem (400 + i, Theme::colourwayName (c), true, c == shownColourway);
+    }
+
+    menu.addSectionHeader ("Panel");
+    menu.addSubMenu ("Colour", colours);
+    menu.addItem (210, "Dark Panel", true, shownDark);
     menu.addSeparator();
+    menu.addSectionHeader ("Meters");
+    menu.addItem (200, "Reset Meters  (R)");
+    menu.addItem (211, "Freeze  (F)", true, plugin.getBoolParameter (FXParams::freeze));
+    menu.addSeparator();
+    menu.addItem (201, "Save Diagnostics...");
     menu.addItem (300, "FX Analyzer " + juce::String (JucePlugin_VersionString), false);
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (header.getMenuScreenArea()),
@@ -471,6 +566,10 @@ void FXAnalyzerEditor::showMenu()
     {
         if (result == 200)      plugin.getAnalysis().resetMeters();
         else if (result == 201) saveDiagnostics();
+        else if (result == 210) setDarkMode (! Theme::darkPanel);
+        else if (result == 211) plugin.setBoolParameter (FXParams::freeze, ! plugin.getBoolParameter (FXParams::freeze));
+        else if (result >= 400 && result < 400 + Theme::numColourways)
+            setColourway ((Theme::Colourway) (result - 400));
     });
 }
 

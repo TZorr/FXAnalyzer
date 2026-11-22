@@ -69,7 +69,7 @@ namespace
         return std::bit_cast<std::uint32_t> (a) == std::bit_cast<std::uint32_t> (b);
     }
 
-    void section (const std::string& title)
+    void heading (const std::string& title)
     {
         std::printf ("\n\033[1m%s\033[0m\n", title.c_str());
     }
@@ -173,7 +173,7 @@ namespace
 //==============================================================================
 static void testCoefficientDerivation()
 {
-    section ("K-weighting derivation vs. the BS.1770-4 table at 48 kHz");
+    heading ("K-weighting derivation vs. the BS.1770-4 table at 48 kHz");
 
     const auto shelf = LoudnessMeter::makeShelfCoefficients (48000.0);
 
@@ -195,7 +195,7 @@ static void testCoefficientDerivation()
 //==============================================================================
 static void testLoudnessSines()
 {
-    section ("EBU Tech 3341 sine cases, at three sample rates");
+    heading ("EBU Tech 3341 sine cases, at three sample rates");
 
     // The reason the coefficients are derived rather than pasted: 44.1 and
     // 96 kHz have to read the same as 48. A meter using the pasted 48 kHz table
@@ -231,7 +231,7 @@ static void testLoudnessSines()
 //==============================================================================
 static void testLoudnessRange()
 {
-    section ("Loudness range, EBU Tech 3342");
+    heading ("Loudness range, EBU Tech 3342");
 
     constexpr double sampleRate = 48000.0;
 
@@ -275,7 +275,7 @@ static void testLoudnessRange()
 //==============================================================================
 static void testTruePeak()
 {
-    section ("True peak");
+    heading ("True peak");
 
     constexpr double sampleRate = 48000.0;
 
@@ -309,7 +309,7 @@ static void testTruePeak()
 //==============================================================================
 static void testSpectrumCalibration()
 {
-    section ("Spectrum calibration");
+    heading ("Spectrum calibration");
 
     constexpr double sampleRate = 48000.0;
 
@@ -363,7 +363,7 @@ static void testSpectrumCalibration()
 //==============================================================================
 static void testSpectrumPeakEstimate()
 {
-    section ("Spectrum peak estimation");
+    heading ("Spectrum peak estimation");
 
     constexpr double sampleRate = 48000.0;
 
@@ -394,7 +394,7 @@ static void testSpectrumPeakEstimate()
 //==============================================================================
 static void testReactivity()
 {
-    section ("Reactivity: peak envelope against running average");
+    heading ("Reactivity: peak envelope against running average");
 
     constexpr double sampleRate = 48000.0;
     constexpr double loudDb  =  -6.0;
@@ -502,7 +502,7 @@ static void testReactivity()
 //==============================================================================
 static void testMultiResolution()
 {
-    section ("Multi-resolution");
+    heading ("Multi-resolution");
 
     constexpr double sampleRate = 48000.0;
     constexpr int    blockSize  = 512;
@@ -667,7 +667,7 @@ static void testMultiResolution()
 */
 static void testSpectrumRelease()
 {
-    section ("Release, and the Auto attack at Very Slow");
+    heading ("Release, and the Auto attack at Very Slow");
 
     constexpr double sampleRate = 48000.0;
     constexpr int    blockSize  = 512;
@@ -808,7 +808,7 @@ static void testSpectrumRelease()
 /** The tilt: a value now rather than one of four, turning about a pivot. */
 static void testSpectrumTilt()
 {
-    section ("Tilt slope and pivot");
+    heading ("Tilt slope and pivot");
 
     expectNear (FXParams::spectrumTiltAt (1000.0f, 4.5f, 1000.0f), 0.0, 1.0e-6,
                 "the pivot reads its measured level");
@@ -855,7 +855,7 @@ static void testSpectrumTilt()
 //==============================================================================
 static void testScopeTimeBases()
 {
-    section ("Scope time bases");
+    heading ("Scope time bases");
 
     // Requested equals delivered, at every setting and every rate.
     //
@@ -909,7 +909,7 @@ static void testScopeTimeBases()
 //==============================================================================
 static void testOverlap()
 {
-    section ("Overlap and analysis rate");
+    heading ("Overlap and analysis rate");
 
     constexpr double sampleRate = 48000.0;
     constexpr int    blockSize  = 512;
@@ -990,7 +990,7 @@ static void testOverlap()
 //==============================================================================
 static void testConcurrentReallocation()
 {
-    section ("Re-preparing while the display is reading");
+    heading ("Re-preparing while the display is reading");
 
     // What a host does when a plugin is dragged to another slot during
     // playback: prepareToPlay again, possibly with a different block size,
@@ -1069,7 +1069,7 @@ static void testConcurrentReallocation()
 //==============================================================================
 static void testAgainstTextbookDFT()
 {
-    section ("The transform, against a brute-force DFT");
+    heading ("The transform, against a brute-force DFT");
 
     // Is it a real Fourier transform, or something that merely looks like one?
     //
@@ -1179,7 +1179,7 @@ static void testAgainstTextbookDFT()
 //==============================================================================
 static void testOctaveSmoothing()
 {
-    section ("Octave smoothing");
+    heading ("Octave smoothing");
 
     constexpr double sampleRate = 48000.0;
 
@@ -1337,7 +1337,7 @@ static void testOctaveSmoothing()
 //==============================================================================
 static void testAxisRange()
 {
-    section ("Adjustable dB axis");
+    heading ("Adjustable dB axis");
 
     // The default has to reproduce the fixed axis it replaced, or every session
     // saved before the range existed opens looking different.
@@ -1403,7 +1403,7 @@ static void testAxisRange()
 */
 static void testBassBandResolution()
 {
-    section ("The bass band: how many bins, and what the zoom does with them");
+    heading ("The bass band: how many bins, and what the zoom does with them");
 
     // ---- How many bins are in the band, at every size and every rate --------
     for (const double sampleRate : { 44100.0, 48000.0, 96000.0, 192000.0 })
@@ -1556,7 +1556,7 @@ static void testBassBandResolution()
     // Swept across plot widths rather than measured at one, so the conclusion
     // does not quietly depend on a window size somebody may drag. The zoom's
     // magnification is the ratio of the two, and it is the same at every width.
-    section ("The bass zoom: magnification, and where it stops being only that");
+    heading ("The bass zoom: magnification, and where it stops being only that");
 
     for (const float widthPixels : { 600.0f, 732.0f, 1100.0f, 1400.0f })
     {
@@ -1622,7 +1622,7 @@ static void testBassBandResolution()
     changes. */
 static void testCursorReadoutStability()
 {
-    section ("The cursor readout stands still");
+    heading ("The cursor readout stands still");
 
     constexpr double sampleRate = 48000.0;
     constexpr float  frame      = 1.0f / (float) FXParams::displayFramesPerSecond;
@@ -1714,7 +1714,7 @@ static void testCursorReadoutStability()
     measured here rather than left to be discovered. */
 static void testLevelAcrossFftSizes()
 {
-    section ("The level does not depend on the window length");
+    heading ("The level does not depend on the window length");
 
     constexpr double sampleRate = 48000.0;
 
@@ -1816,7 +1816,7 @@ static void testLevelAcrossFftSizes()
 //==============================================================================
 static void testPeakHoldReturn()
 {
-    section ("Peak hold return rate");
+    heading ("Peak hold return rate");
 
     constexpr double sampleRate = 48000.0;
     constexpr float  hold       = 1.5f;
@@ -1869,7 +1869,7 @@ static void testPeakHoldReturn()
 //==============================================================================
 static void testDCBlocker()
 {
-    section ("DC blocker");
+    heading ("DC blocker");
 
     constexpr double sampleRate = 48000.0;
 
@@ -1909,7 +1909,7 @@ static void testDCBlocker()
 //==============================================================================
 static void testOscilloscope()
 {
-    section ("Scope capture");
+    heading ("Scope capture");
 
     constexpr double sampleRate = 48000.0;
     constexpr int    blockSize  = 512;
@@ -1990,7 +1990,7 @@ static void testOscilloscope()
 //==============================================================================
 static void testStereoAnalyser()
 {
-    section ("Stereo field");
+    heading ("Stereo field");
 
     constexpr double sampleRate = 48000.0;
     constexpr int length = (int) (sampleRate * 3.0);
@@ -2083,7 +2083,7 @@ static void testStereoAnalyser()
 //==============================================================================
 static void testPitchDetector()
 {
-    section ("Pitch");
+    heading ("Pitch");
 
     constexpr double sampleRate = 48000.0;
 
@@ -2153,7 +2153,7 @@ static void testPitchDetector()
 //==============================================================================
 static void testNoteNaming()
 {
-    section ("Note naming");
+    heading ("Note naming");
 
     struct Case { double frequency; const char* name; int octave; };
 
@@ -2183,7 +2183,7 @@ static void testNoteNaming()
 //==============================================================================
 static void testAnalysisChain()
 {
-    section ("The analysis chain, and the promise not to touch the audio");
+    heading ("The analysis chain, and the promise not to touch the audio");
 
     constexpr double sampleRate = 48000.0;
     constexpr int    blockSize  = 512;
@@ -2283,6 +2283,117 @@ static void testAnalysisChain()
 }
 
 //==============================================================================
+//==============================================================================
+/** The TARGET page: Clearbox's measurement, run by the hub. Its numbers must be
+    Clearbox's - checked by feeding the same signal to a bare copy of the engine
+    and comparing every band bit for bit - and it must only run while the page
+    is on screen. */
+static void testTargetPage()
+{
+    heading ("TARGET page: Clearbox's measurement, identical numbers");
+
+    constexpr double rate = 48000.0;
+    constexpr int block = 512;
+    const auto pink = [] (std::size_t n, unsigned seed)
+    {
+        std::mt19937 g (seed);
+        std::normal_distribution<float> d (0.0f, 1.0f);
+        std::vector<float> o (n);
+        double b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        for (auto& v : o)
+        {
+            const double w = d (g);
+            b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.96900 * b2 + w * 0.1538520;
+            b3 = 0.86650 * b3 + w * 0.3104856; b4 = 0.55000 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.0168980;
+            v = (float) (0.02 * (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362));
+            b6 = w * 0.115926;
+        }
+        return o;
+    };
+
+    const std::size_t length = 8 * 48000;
+    const auto left = pink (length, 1), right = pink (length, 2);
+
+    // Through the hub, with the TARGET page on screen ...
+    AnalysisHub hub;
+    hub.prepare (rate, block);
+    hub.setActivePage (FXParams::Page::target);
+
+    // ... and through a bare copy of the engine, block for block.
+    ClearEngine bare;
+    bare.prepare (rate, block);
+
+    juce::AudioBuffer<float> buffer (2, block);
+    std::vector<float> l (block), r (block);
+    bool untouched = true;
+
+    for (std::size_t start = 0; start + block <= length; start += block)
+    {
+        for (int i = 0; i < block; ++i)
+        {
+            buffer.setSample (0, i, left[start + (std::size_t) i]);
+            buffer.setSample (1, i, right[start + (std::size_t) i]);
+            l[(std::size_t) i] = left[start + (std::size_t) i];
+            r[(std::size_t) i] = right[start + (std::size_t) i];
+        }
+
+        hub.pushBlock (buffer);
+        bare.process (l.data(), r.data(), block, {});
+
+        for (int i = 0; i < block; ++i)
+            untouched = untouched && sameBits (buffer.getSample (0, i), left[start + (std::size_t) i])
+                                  && sameBits (buffer.getSample (1, i), right[start + (std::size_t) i]);
+    }
+
+    expectTrue (untouched, "the host's buffer is not touched while TARGET measures");
+
+    const auto& engine = hub.getTarget();
+    bool identical = engine.getNumBands() == bare.getNumBands() && engine.getNumBands() > 30;
+    for (int b = 0; b < engine.getNumBands(); ++b)
+        identical = identical && sameBits (engine.getDisplayDeviationDb (b), bare.getDisplayDeviationDb (b))
+                              && sameBits (engine.getDisplayConfidence (b), bare.getDisplayConfidence (b));
+    expectTrue (identical, "every band reads exactly what Clearbox's engine reads", std::to_string (engine.getNumBands()) + " bands");
+
+    const auto deviationAt = [&] (float hz)
+    {
+        int best = 0;
+        for (int b = 0; b < engine.getNumBands(); ++b)
+            if (std::abs (std::log2 (engine.getBandFrequency (b) / hz)) < std::abs (std::log2 (engine.getBandFrequency (best) / hz)))
+                best = b;
+        return engine.getDisplayDeviationDb (best);
+    };
+
+    // Pink rises 1.5 dB/oct in the 4.5 dB/oct view - 7.5 dB over five octaves - plus
+    // what the target's own roll-off takes away at 8 kHz and not at 250 Hz.
+    const auto expected = 7.5 + ClearEngine::targetShapeDb (250.0f) - ClearEngine::targetShapeDb (8000.0f);
+    expectWithin (deviationAt (8000.0f) - deviationAt (250.0f), expected - 1.0, expected + 1.0,
+                  "pink noise: 8 kHz - 250 Hz reads as in Clearbox");
+
+    // Silence: the global gate holds.
+    buffer.clear();
+    for (int i = 0; i < 400; ++i)
+        hub.pushBlock (buffer);
+    expectTrue (hub.getTarget().isHolding(), "silence holds (HOLD)");
+
+    // Not on screen: not measured at all.
+    AnalysisHub idle;
+    idle.prepare (rate, block);
+    idle.setActivePage (FXParams::Page::spectrum);
+    for (std::size_t start = 0; start + block <= 2 * 48000; start += block)
+    {
+        for (int i = 0; i < block; ++i)
+        {
+            buffer.setSample (0, i, left[start + (std::size_t) i]);
+            buffer.setSample (1, i, right[start + (std::size_t) i]);
+        }
+        idle.pushBlock (buffer);
+    }
+    bool silentEngine = true;
+    for (int b = 0; b < idle.getTarget().getNumBands(); ++b)
+        silentEngine = silentEngine && sameBits (idle.getTarget().getDisplayConfidence (b), 0.0f);
+    expectTrue (silentEngine, "with another page on screen the measurement does not run");
+}
+
 int main (int, char**)
 {
     std::printf ("\n\033[1mFX Analyzer - AnalyzerCheck\033[0m\n");
@@ -2314,6 +2425,7 @@ int main (int, char**)
     testPitchDetector();
     testNoteNaming();
     testAnalysisChain();
+    testTargetPage();
 
     std::printf ("\n%d checks, %d failures\n\n", checks, failures);
 

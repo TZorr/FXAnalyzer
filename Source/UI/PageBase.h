@@ -87,13 +87,15 @@ namespace Layout
     // rather than as a header that grows and a graph that does not.
     inline constexpr int defaultWidth  = 900;
     inline constexpr int defaultHeight = 504;
-    inline constexpr int headerHeight  = 68;
-    inline constexpr int tabBarHeight  = 34;
+    // 0.4.0 design: a 72 point header row and a 30 point tab row, 12 points
+    // from the window edge and 8 apart, the display taking what is left.
+    inline constexpr int headerHeight  = 84;
+    inline constexpr int tabBarHeight  = 44;
 
     /** The space between a page's edge and what it draws, so that the displays
-        and the header line up at the panel's 15 point margin (the editor itself
+        and the header line up at the panel's 12 point margin (the editor itself
         is inset by 2). */
-    inline constexpr int pageMarginX = 13;
+    inline constexpr int pageMarginX = 10;
     inline constexpr int pageMarginY = 6;
 
     /** Dead space below the tab labels, at the very bottom of the window.
@@ -130,6 +132,10 @@ namespace Layout
 
     /** Room for the dB labels down the left of a graph, and for the frequency
         labels under it. */
-    inline constexpr int axisGutterLeft   = 56;
-    inline constexpr int axisGutterBottom = 26;
+    inline constexpr int axisGutterLeft   = 50;
+    inline constexpr int axisGutterBottom = 28;
+
+    /** The row of buttons and small print along the top of a graph display,
+        above the plot rather than over it (0.4.0). */
+    inline constexpr int graphToolbarHeight = 24;
 }

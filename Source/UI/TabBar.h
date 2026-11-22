@@ -64,7 +64,7 @@ public:
     }
 
 private:
-    static constexpr float gap = 5.0f;
+    static constexpr float gap = 6.0f;
 
     /** Where the label is drawn. */
     juce::Rectangle<float> areaForTab (int index) const;
